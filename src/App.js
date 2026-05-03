@@ -1,227 +1,368 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Application root.
+ *
+ * Owns three responsibilities and only those three:
+ *   1. State of the current page id and the opening splash flag.
+ *   2. Resolution of that page id to a React component (PAGE_REGISTRY).
+ *   3. Composition of the global chrome — header, footer, scroll progress,
+ *      and three floating action buttons.
+ *
+ * Navigation is exposed via NavigationContext. Descendants read with
+ * `useNavigation()` and never receive `setCurrentPage` as a prop.
+ *
+ * Routing model:
+ *   The active page lives in React state, not in the URL. This is a
+ *   deliberate trade-off documented in CLAUDE.md — the site has no server
+ *   rewriter for SPA routes, so URL-based routing would break refreshes on
+ *   non-root paths. Consequence: no browser back/forward, no deep links,
+ *   no per-page SEO. If those become requirements, see the migration note
+ *   at the foot of this file.
+ *
+ * Code splitting:
+ *   Every non-Home page is loaded via React.lazy. Most home-page visitors
+ *   never visit the other pages; their chunks are deferred and only fetched
+ *   on first navigation, then cached.
+ */
+
+import React, { lazy, Suspense, useEffect, useMemo, useState, useRef } from 'react';
 import './App.css';
 import './Pages.css';
+import './Admin.css';
+import './responsive.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import { ReviewsPage, AboutPage, ServicesPage, MenusPage, GalleryPage, ContactPage } from './Pages';
+
 import EntryAnimation from './EntryAnimation';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import TestimonialsPreview from './components/TestimonialsPreview';
-import GalleryPreview from './components/GalleryPreview';
-import heroImage from './best.png';
 
-// Hero Component
-const Hero = ({ setCurrentPage }) => {
-  return (
-    <section className="hero" style={{ backgroundImage: `linear-gradient(135deg, rgba(15, 40, 24, 0.85) 0%, rgba(26, 71, 42, 0.75) 100%), url(${heroImage})` }}>
-      <div className="hero-content">
-        <h1>Pure Vegetarian Catering Rooted in Tradition</h1>
-        <p>Serving discerning families and institutions with authentic flavors and quiet excellence</p>
-        <div className="hero-cta">
-          <a href="#contact" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setCurrentPage('contact'); }}>
-            <i className="fas fa-file-alt"></i> Request Quote
-          </a>
-          <a href="#menus" className="btn btn-secondary" onClick={(e) => { e.preventDefault(); setCurrentPage('menus'); }}>
-            <i className="fas fa-concierge-bell"></i> View Menus
-          </a>
-        </div>
-      </div>
-    </section>
-  );
+import Header from './components/layout/Header';
+import Footer from './components/layout/Footer';
+import ScrollProgress from './components/layout/ScrollProgress';
+import RouteLoader from './components/ui/RouteLoader';
+
+import WhatsAppFAB from './components/floating/WhatsAppFAB';
+import FloatingCTA from './components/floating/FloatingCTA';
+import BackToTop from './components/floating/BackToTop';
+
+import HomePage from './pages/HomePage';
+import { NavigationProvider } from './contexts/NavigationContext';
+import { ROUTES } from './constants/navigation';
+import { ToastProvider } from './pages/admin/useToast';
+import AdminLayout from './components/admin/layout/AdminLayout';
+
+/* HomePage is eagerly imported because it is the landing page for every
+   first-time visitor. Lazy-loading it would add a chunk-fetch hop in the
+   critical render path. */
+const AboutPage    = lazy(() => import('./pages/AboutPage'));
+const ServicesPage = lazy(() => import('./pages/ServicesPage'));
+const MenusPage    = lazy(() => import('./pages/MenusPage'));
+const GalleryPage  = lazy(() => import('./pages/GalleryPage'));
+const ReviewsPage  = lazy(() => import('./pages/ReviewsPage'));
+const ContactPage  = lazy(() => import('./pages/ContactPage'));
+const ClientReviewsPage = lazy(() => import('./pages/ClientReviewsPage'));
+
+/* Admin pages — lazy-loaded like other pages */
+const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
+const AdminSendInvitationPage = lazy(() => import('./pages/admin/SendInvitationPage'));
+const AdminClientsPage = lazy(() => import('./pages/admin/ClientsPage'));
+const AdminEmailBuilderPage = lazy(() => import('./pages/admin/EmailBuilderPage'));
+const AdminQuotesPage = lazy(() => import('./pages/admin/QuotesPage'));
+const AdminSubscribersPage = lazy(() => import('./pages/admin/SubscribersPage'));
+
+/**
+ * Route id → page component. The single point of extension for adding a
+ * new page (Open/Closed): one import + one row here, never a switch edit.
+ *
+ * @type {Object<string, React.ComponentType>}
+ */
+const PAGE_REGISTRY = {
+  [ROUTES.HOME]:     HomePage,
+  [ROUTES.ABOUT]:    AboutPage,
+  [ROUTES.SERVICES]: ServicesPage,
+  [ROUTES.MENUS]:    MenusPage,
+  [ROUTES.GALLERY]:  GalleryPage,
+  [ROUTES.REVIEWS]:  ReviewsPage,
+  [ROUTES.CONTACT]:  ContactPage,
+  [ROUTES.FEEDBACK]: ClientReviewsPage,
+  
+  // Admin routes
+  'admin-login': AdminLoginPage,
+  'admin-dashboard': AdminDashboardPage,
+  'admin-reviews': AdminReviewsPage,
+  'admin-send-invitation': AdminSendInvitationPage,
+  'admin-clients': AdminClientsPage,
+  'admin-emails': AdminEmailBuilderPage,
+  'admin-quotes': AdminQuotesPage,
+  'admin-subscribers': AdminSubscribersPage,
 };
 
-// Trust Bar Component - Only on Home
-const TrustBar = () => {
-  const trustItems = [
-    { icon: 'fas fa-trophy', title: 'Established Legacy', desc: 'Trusted by Families & Institutions' },
-    { icon: 'fas fa-utensils', title: 'Experienced Chefs', desc: 'Authentic Regional Cuisines' },
-    { icon: 'fas fa-shield-alt', title: 'Quality Assured', desc: 'Premium Ingredients & Hygiene' },
-    { icon: 'fas fa-leaf', title: '100% Vegetarian', desc: 'Pure & Traditional' }
-  ];
+/**
+ * Suspense fallback rendered while a lazy page chunk is in flight.
+ * Intentionally empty — the chunk is small and the wait is sub-200ms on
+ * a normal connection. A spinner here would flash and feel slower than
+ * just letting the next page paint when ready.
+ */
+const PageFallback = () => <div className="page-fallback" aria-hidden="true" />;
 
-  return (
-    <section className="trust-bar">
-      <div className="trust-items">
-        {trustItems.map((item, idx) => (
-          <div key={idx} className="trust-item">
-            <div className="trust-icon"><i className={item.icon}></i></div>
-            <h3>{item.title}</h3>
-            <p>{item.desc}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+const SPLASH_SEEN_KEY = 'splash-seen';
+
+/**
+ * Decide whether to show the opening splash for this page load.
+ *
+ * Returns false when:
+ *   - The user prefers reduced motion (skip the splash entirely; the
+ *     existing CSS reduced-motion path also degrades the animation, but
+ *     bypassing the wait gives them an instant page).
+ *
+ * The splash will show on every hard refresh (browser close/reopen) but
+ * not on soft refreshes (F5, Ctrl+R) within the same browser session.
+ * We use a window-scoped flag instead of sessionStorage so it only
+ * persists during the current page lifecycle.
+ */
+const shouldShowSplash = () => {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+    
+    // Check if splash has been shown in this window instance
+    // This flag is cleared on hard refresh but persists on soft refresh
+    if (window.__splashShown) return false;
+    
+    return true;
+  } catch {
+    return true;
+  }
 };
 
-// Services Preview - Only on Home (3 cards)
-const ServicesPreview = ({ setCurrentPage }) => {
-  const services = [
-    {
-      title: 'Wedding Catering',
-      desc: 'Elegant celebrations crafted with care for intimate gatherings and grand occasions.',
-      image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=600',
-      icon: 'fas fa-heart'
-    },
-    {
-      title: 'Corporate Events',
-      desc: 'Reliable daily catering for offices and professional gatherings.',
-      image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=600',
-      icon: 'fas fa-briefcase'
-    },
-    {
-      title: 'Private Celebrations',
-      desc: 'Thoughtfully curated menus for family occasions and personal milestones.',
-      image: '/private-parties.jpg',
-      icon: 'fas fa-glass-cheers'
-    }
-  ];
-
-  return (
-    <section className="section">
-      <div className="container">
-        <div className="section-header">
-          <h2>Our Services</h2>
-          <p>Catering with care for every occasion</p>
-        </div>
-        <div className="cards-grid">
-          {services.map((service, idx) => (
-            <div key={idx} className="card">
-              <div className="card-image-wrapper">
-                <img src={service.image} alt={service.title} className="card-image" />
-                <img src="/logo.png" alt="Watermark" className="card-watermark" />
-              </div>
-              <div className="card-content">
-                <h3><i className={service.icon}></i> {service.title}</h3>
-                <p>{service.desc}</p>
-                <a href="#services" className="card-link" onClick={(e) => { e.preventDefault(); setCurrentPage('services'); }}>
-                  Learn More <i className="fas fa-arrow-right"></i>
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{textAlign: 'center', marginTop: '50px'}}>
-          <button className="btn btn-primary" onClick={() => setCurrentPage('services')}>
-            <i className="fas fa-concierge-bell"></i> View All Services
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-};
-
-// Menu Preview - Only on Home (3 items)
-const MenuPreview = ({ setCurrentPage }) => {
-  const menus = [
-    {
-      title: 'Indian Classics',
-      price: '₹450/plate',
-      image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600',
-      tags: ['Paneer', 'Dal', 'Biryani']
-    },
-    {
-      title: 'Continental Delights',
-      price: '₹550/plate',
-      image: 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=600',
-      tags: ['Pasta', 'Salads', 'Soups']
-    },
-    {
-      title: 'Oriental Fusion',
-      price: '₹500/plate',
-      image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=600',
-      tags: ['Noodles', 'Rice', 'Dumplings']
-    }
-  ];
-
-  return (
-    <section className="section section-alt">
-      <div className="container">
-        <div className="section-header">
-          <h2>Featured Menus</h2>
-          <p>Authentic regional flavors prepared with premium ingredients</p>
-        </div>
-        <div className="cards-grid">
-          {menus.map((menu, idx) => (
-            <div key={idx} className="menu-card">
-              <div className="menu-image-wrapper">
-                <img src={menu.image} alt={menu.title} className="menu-card-image" />
-                <img src="/logo.png" alt="Watermark" className="menu-watermark" />
-              </div>
-              <div className="menu-card-content">
-                <div className="menu-card-header">
-                  <h3>{menu.title}</h3>
-                  <span className="price-tag">{menu.price}</span>
-                </div>
-                <p>Authentic flavors prepared by expert chefs</p>
-                <div className="menu-tags">
-                  {menu.tags.map((tag, i) => (
-                    <span key={i} className="tag">{tag}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{textAlign: 'center', marginTop: '50px'}}>
-          <button className="btn btn-primary" onClick={() => setCurrentPage('menus')}>
-            <i className="fas fa-utensils"></i> View All Menus
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-};
-
-// Floating CTA
-const FloatingCTA = ({ setCurrentPage }) => {
-  return (
-    <div className="floating-cta" onClick={() => setCurrentPage('contact')}>
-      <i className="fas fa-phone-alt"></i> Book Now
-    </div>
-  );
-};
-
-// Main App Component
+/**
+ * Application root component.
+ *
+ * @returns {React.ReactElement}
+ */
 function App() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [showAnimation, setShowAnimation] = useState(true);
+  /* Active route id. Honour the URL hash on first load so links like
+     `#admin-login` work directly (and the Footer's "Staff login" anchor
+     is a real shareable link). Falls back to HOME if the hash is
+     missing or doesn't resolve to a known route. */
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (typeof window === 'undefined') return ROUTES.HOME;
+    const hash = window.location.hash.slice(1);
+    if (hash && PAGE_REGISTRY[hash]) return hash;
+    return ROUTES.HOME;
+  });
 
+  /* Opening-splash visibility. Lazy initial state — runs only on first
+     render — so returning visitors and reduced-motion users skip the
+     3 s wait entirely. */
+  const [showAnimation, setShowAnimation] = useState(shouldShowSplash);
+
+  /* Route loading state — only shows loader when lazy-loaded pages are
+     being fetched for the first time. Once cached, no loader appears. */
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  
+  /* Track which pages have been loaded to avoid showing loader again */
+  const loadedPagesRef = useRef(new Set([ROUTES.HOME])); // Home is eagerly loaded
+
+  /* Admin authentication check — redirect to login if accessing admin pages
+     without valid token. Token is stored in localStorage with expiry. 
+     
+     Development bypass: Set localStorage.setItem('adminToken', 'dev') and 
+     localStorage.setItem('adminTokenExpiry', Date.now() + 86400000) in console
+     to skip login for 24 hours. */
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const isAdminPage = currentPage.startsWith('admin-');
+    const isLoginPage = currentPage === 'admin-login';
+    
+    if (isAdminPage && !isLoginPage) {
+      // Check if user is authenticated
+      const token = localStorage.getItem('adminToken');
+      const expiry = localStorage.getItem('adminTokenExpiry');
+      const isAuthenticated = token && expiry && Date.now() < parseInt(expiry);
+      
+      if (!isAuthenticated) {
+        // Clear loading state and redirect to login
+        setIsRouteLoading(false);
+        loadedPagesRef.current.add('admin-login'); // Mark login as loaded to avoid loader
+        setCurrentPage('admin-login');
+      }
+    }
   }, [currentPage]);
 
-  const handleAnimationComplete = () => {
+  /* Snap to top on every navigation so users never land mid-scroll inside a
+     page they just opened. Instant scroll (not smooth) is intentional — a
+     smooth scroll across an entire page-height feels slow on long content. */
+  useEffect(() => { window.scrollTo(0, 0); }, [currentPage]);
+
+  /* Keep the URL hash in sync with the current page so links like
+     `https://…/#admin-login` are shareable and refreshable. */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const expected = `#${currentPage}`;
+    if (window.location.hash !== expected) {
+      window.history.replaceState(null, '', expected);
+    }
+  }, [currentPage]);
+
+  /* Listen for browser-driven hash changes (back / forward / pasted URL). */
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash && PAGE_REGISTRY[hash] && hash !== currentPage) {
+        setCurrentPage(hash);
+      } else if (!hash && currentPage !== ROUTES.HOME) {
+        setCurrentPage(ROUTES.HOME);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [currentPage]);
+
+  /* Track route changes and show loader only for first-time page loads.
+     Once a page is loaded, it's cached by React.lazy and won't trigger
+     the loader again. */
+  useEffect(() => {
+    // Check if this page has been loaded before
+    if (!loadedPagesRef.current.has(currentPage)) {
+      // First time loading this page - show loader
+      setIsRouteLoading(true);
+      
+      // Mark page as loaded after component mounts
+      const timer = setTimeout(() => {
+        loadedPagesRef.current.add(currentPage);
+        setIsRouteLoading(false);
+      }, 300); // Increased delay to ensure component has mounted
+      
+      return () => clearTimeout(timer);
+    } else {
+      // Page already loaded, ensure loader is off
+      setIsRouteLoading(false);
+    }
+  }, [currentPage]);
+
+  /* Prefetch the most-likely-next pages during browser idle time so the
+     first navigation feels instant. We don't need them for the initial
+     paint, but starting their fetch in the background means the chunks
+     are already in the HTTP cache by the time the user clicks.
+     requestIdleCallback fires after the browser has finished critical
+     work; falls back to a setTimeout on Safari (which lacks the API). */
+  useEffect(() => {
+    const prefetch = () => {
+      import('./pages/MenusPage');
+      import('./pages/ContactPage');
+    };
+    const ric = window.requestIdleCallback;
+    const id = ric
+      ? ric(prefetch, { timeout: 4000 })
+      : window.setTimeout(prefetch, 2500);
+    return () => {
+      if (ric && window.cancelIdleCallback) window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
+    };
+  }, []);
+
+  /* Memoised navigation value — the contract that NavigationContext exposes.
+     Identity must change only when `currentPage` actually changes; otherwise
+     every consumer of useNavigation re-renders on every App render. */
+  const navigation = useMemo(
+    () => ({ currentPage, navigate: setCurrentPage }),
+    [currentPage]
+  );
+
+  /* Defensive fallback to HomePage if a future bug ever sets currentPage to
+     an unregistered id. Silent recovery is acceptable here because routing
+     is internal — there is no user-typed URL to mistype. */
+  const PageComponent = PAGE_REGISTRY[currentPage] || HomePage;
+  const isAdminRoute = currentPage.startsWith('admin-');
+  const isAdminShellRoute = isAdminRoute && currentPage !== 'admin-login';
+
+  /* When the splash finishes, mark the window instance so subsequent navigations
+     in this tab skip the splash. This flag is cleared on hard refresh but
+     persists during soft refreshes (F5, Ctrl+R). */
+  const handleSplashComplete = () => {
+    try {
+      window.__splashShown = true;
+    } catch {
+      /* Flag is best-effort, not critical. */
+    }
     setShowAnimation(false);
   };
 
   return (
-    <div className="App">
-      {showAnimation && <EntryAnimation onComplete={handleAnimationComplete} />}
-      <Header setCurrentPage={setCurrentPage} currentPage={currentPage} />
-      
-      {currentPage === 'home' && (
-        <>
-          <Hero setCurrentPage={setCurrentPage} />
-          <TrustBar />
-          <ServicesPreview setCurrentPage={setCurrentPage} />
-          <MenuPreview setCurrentPage={setCurrentPage} />
-          <GalleryPreview setCurrentPage={setCurrentPage} />
-          <TestimonialsPreview setCurrentPage={setCurrentPage} />
-        </>
-      )}
-      
-      {currentPage === 'reviews' && <ReviewsPage />}
-      {currentPage === 'about' && <AboutPage />}
-      {currentPage === 'services' && <ServicesPage setCurrentPage={setCurrentPage} />}
-      {currentPage === 'menus' && <MenusPage />}
-      {currentPage === 'gallery' && <GalleryPage />}
-      {currentPage === 'contact' && <ContactPage />}
-      
-      <Footer setCurrentPage={setCurrentPage} />
-      <FloatingCTA setCurrentPage={setCurrentPage} />
-    </div>
+    <NavigationProvider value={navigation}>
+      <div className="App">
+        {/* Splash sits above everything else (z-index 9999 in CSS) and
+            unmounts when EntryAnimation calls onComplete. */}
+        {showAnimation && <EntryAnimation onComplete={handleSplashComplete} />}
+
+        {/* Only show public site chrome (header, footer, FABs) for non-admin pages */}
+        {!isAdminRoute && (
+          <>
+            <ScrollProgress />
+            <Header />
+          </>
+        )}
+
+        {/* Route loader — appears during page transitions */}
+        <RouteLoader isLoading={isRouteLoading} />
+
+        {/*
+          Three render branches:
+          1. Admin shell pages — AdminLayout (sidebar + topbar) is the stable
+             root and stays mounted across admin route changes; the inner
+             content is keyed by route inside AdminLayout so it still fades
+             in. This is what gives the admin its persistent sidebar.
+          2. admin-login — full-bleed page with no admin chrome.
+          3. Public pages — keyed <main> as before, so the page-shell
+             fade-up entrance animation fires on every navigation.
+        */}
+        {isAdminShellRoute ? (
+          <ToastProvider>
+            <AdminLayout>
+              <Suspense fallback={<PageFallback />}>
+                <PageComponent />
+              </Suspense>
+            </AdminLayout>
+          </ToastProvider>
+        ) : isAdminRoute ? (
+          <main className="page-shell" key={currentPage}>
+            <ToastProvider>
+              <Suspense fallback={<PageFallback />}>
+                <PageComponent />
+              </Suspense>
+            </ToastProvider>
+          </main>
+        ) : (
+          <main className="page-shell" key={currentPage}>
+            <Suspense fallback={<PageFallback />}>
+              <PageComponent />
+            </Suspense>
+          </main>
+        )}
+
+        {/* Only show public site chrome for non-admin pages */}
+        {!isAdminRoute && (
+          <>
+            <Footer />
+            <FloatingCTA />
+            <WhatsAppFAB />
+            <BackToTop />
+          </>
+        )}
+      </div>
+    </NavigationProvider>
   );
 }
 
 export default App;
+
+/*
+ * MIGRATION NOTE — to convert to URL-based routing:
+ *   1. npm install react-router-dom
+ *   2. Wrap <App> in <BrowserRouter> in src/index.js.
+ *   3. Replace the PAGE_REGISTRY switch with <Routes>/<Route>.
+ *   4. NavigationContext can be retained or replaced with `useNavigate()` —
+ *      keeping the context preserves the contract and avoids touching every
+ *      consumer.
+ *   5. Configure CloudFront/S3 to rewrite all 404s to /index.html
+ *      (otherwise refreshes on /menus etc. will 404).
+ */

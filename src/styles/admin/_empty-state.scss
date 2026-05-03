@@ -1,0 +1,123 @@
+/* ============================================================================
+   Admin Empty State Styles
+   Standardized empty state component styling
+   ============================================================================ */
+
+@import './tokens';
+
+.admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-3xl $spacing-lg;
+  text-align: center;
+  min-height: 300px;
+
+  /* Icon */
+  &-icon {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-secondary);
+    border-radius: 50%;
+    margin-bottom: $spacing-lg;
+    color: var(--color-text-light);
+
+    i {
+      font-size: 32px;
+    }
+  }
+
+  /* Title */
+  &-title {
+    font-family: var(--font-display);
+    font-size: $font-size-xl;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    margin: 0 0 $spacing-md;
+    letter-spacing: -0.02em;
+  }
+
+  /* Description */
+  &-description {
+    font-size: $font-size-base;
+    color: var(--color-text-secondary);
+    margin: 0 0 $spacing-lg;
+    max-width: 400px;
+    line-height: $line-height-relaxed;
+  }
+
+  /* Action button container */
+  &-action {
+    margin-top: $spacing-base;
+  }
+
+  /* Variants */
+  &-search {
+    .admin-empty-icon {
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+    }
+  }
+
+  &-error {
+    .admin-empty-icon {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+  }
+
+  /* Compact variant for smaller spaces */
+  &-compact {
+    min-height: 200px;
+    padding: $spacing-xl $spacing-lg;
+
+    .admin-empty-icon {
+      width: 60px;
+      height: 60px;
+      margin-bottom: $spacing-base;
+
+      i {
+        font-size: 24px;
+      }
+    }
+
+    .admin-empty-title {
+      font-size: $font-size-lg;
+      margin-bottom: $spacing-sm;
+    }
+
+    .admin-empty-description {
+      font-size: $font-size-sm;
+      margin-bottom: $spacing-base;
+    }
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: $breakpoint-md) {
+  .admin-empty-state {
+    padding: $spacing-xl $spacing-base;
+    min-height: 250px;
+
+    &-icon {
+      width: 64px;
+      height: 64px;
+
+      i {
+        font-size: 28px;
+      }
+    }
+
+    &-title {
+      font-size: $font-size-lg;
+    }
+
+    &-description {
+      font-size: $font-size-sm;
+    }
+  }
+}

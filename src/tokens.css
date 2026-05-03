@@ -1,47 +1,178 @@
 :root {
-  /* Primary Colors */
-  --color-primary: #1a472a;
-  --color-primary-light: #2d5f3f;
-  --color-primary-dark: #0f2818;
-  
-  /* Accent Colors */
-  --color-accent: #ff6b35;
-  --color-accent-dark: #e85a2a;
-  --color-accent-light: #ff8c61;
-  
-  /* Background Colors */
-  --color-bg-primary: #fdfcfa;
-  --color-bg-secondary: #f7f5f2;
-  --color-bg-tertiary: #ede9e3;
-  --color-bg-dark: #0a0a0a;
-  
-  /* Text Colors */
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #4a5568;
-  --color-text-light: #718096;
+  /* === Brand Palette === */
+  /* Primary: deep forest — refined, less harsh than #1a472a */
+  --color-primary: #143a26;
+  --color-primary-light: #245038;
+  --color-primary-dark: #0a2615;
+  --color-primary-deepest: #061811;
+
+  /* Accent: saffron / turmeric gold — sophisticated, warm, vegetarian-luxe */
+  --color-accent: #c9882f;
+  --color-accent-dark: #a06d20;
+  --color-accent-light: #e1a14a;
+  --color-accent-soft: #f3dcab;
+
+  /* Neutrals: warm ivory & paper, not cold gray */
+  --color-bg-primary: #faf7f1;
+  --color-bg-secondary: #f3eee4;
+  --color-bg-tertiary: #ebe4d4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-dark: #0a1f14;
+  --color-bg-ink: #0e1410;
+
+  /* Text */
+  --color-text-primary: #1a1a17;
+  --color-text-secondary: #4f5147;
+  --color-text-light: #7c7e74;
+  --color-text-muted: #a3a59a;
   --color-text-inverse: #FFFFFF;
-  --color-text-muted: #a0aec0;
-  
-  /* Border Colors */
-  --color-border: #e2dfd9;
-  --color-border-light: #f0ede8;
-  
-  /* Semantic Colors */
+
+  /* Borders */
+  --color-border: #e6dfd1;
+  --color-border-light: #f0ebde;
+  --color-border-strong: #c9c1ad;
+
+  /* Semantic */
   --color-success: #2e7d32;
-  --color-error: #dc2626;
-  --color-warning: #f39c12;
-  --color-info: #3b82f6;
-  
-  /* Shadow Colors */
-  --color-shadow-sm: rgba(26, 71, 42, 0.08);
-  --color-shadow-md: rgba(26, 71, 42, 0.12);
-  --color-shadow-lg: rgba(26, 71, 42, 0.16);
-  
-  /* Overlay Colors */
-  --color-overlay-light: rgba(253, 252, 250, 0.97);
-  --color-overlay-dark: rgba(15, 40, 24, 0.85);
-  
-  /* Sacred/Spiritual Colors */
+  --color-error: #b3261e;
+  --color-warning: #c97f12;
+  --color-info: #2563eb;
+
+  /* Shadows — softer, warmer */
+  --color-shadow-sm: rgba(20, 58, 38, 0.06);
+  --color-shadow-md: rgba(20, 58, 38, 0.10);
+  --color-shadow-lg: rgba(20, 58, 38, 0.16);
+  --color-shadow-xl: rgba(20, 58, 38, 0.22);
+
+  /* Overlays */
+  --color-overlay-light: rgba(250, 247, 241, 0.85);
+  --color-overlay-dark: rgba(10, 31, 20, 0.78);
+  --color-overlay-ink: rgba(10, 20, 16, 0.72);
+
+  /* Sacred accents (kept for entry animation) */
   --color-sacred-text: #f5f5f0;
   --color-sacred-glow: rgba(245, 245, 240, 0.3);
+
+  /* === Legacy aliases (used throughout existing CSS) === */
+  --primary: var(--color-primary);
+  --secondary: var(--color-primary-light);
+  --accent: var(--color-accent);
+  --accent-dark: var(--color-accent-dark);
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-light: var(--color-text-light);
+  --border: var(--color-border);
+
+  /* === Typography === */
+  --font-display: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-script: 'Kaushan Script', cursive;
+  --font-mono: 'JetBrains Mono', Menlo, Monaco, monospace;
+
+  /* Fluid type scale (clamp(min, vw, max)) */
+  --fs-display-xl: clamp(3rem, 7vw, 6rem);
+  --fs-display-lg: clamp(2.4rem, 5vw, 4.25rem);
+  --fs-display-md: clamp(2rem, 4vw, 3.25rem);
+  --fs-h1: clamp(1.75rem, 3.4vw, 2.5rem);
+  --fs-h2: clamp(1.5rem, 2.6vw, 2rem);
+  --fs-h3: clamp(1.15rem, 1.5vw, 1.35rem);
+  --fs-body-lg: clamp(1rem, 1.1vw, 1.125rem);
+  --fs-body: 1rem;
+  --fs-body-sm: 0.875rem;
+  --fs-caption: 0.75rem;
+
+  /* Letter spacing */
+  --ls-tight: -0.03em;
+  --ls-snug: -0.015em;
+  --ls-normal: 0;
+  --ls-wide: 0.04em;
+  --ls-eyebrow: 0.18em;
+
+  /* === Spacing scale (8pt grid) === */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+  --space-10: 8rem;
+
+  /* === Radii === */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 999px;
+
+  /* === Shadows === */
+  --shadow-xs: 0 1px 2px var(--color-shadow-sm);
+  --shadow-sm: 0 2px 8px var(--color-shadow-sm);
+  --shadow-md: 0 8px 24px var(--color-shadow-md);
+  --shadow-lg: 0 16px 48px var(--color-shadow-lg);
+  --shadow-xl: 0 28px 80px var(--color-shadow-xl);
+  --shadow-glow: 0 0 0 1px rgba(201, 136, 47, 0.25), 0 8px 32px rgba(201, 136, 47, 0.18);
+
+  /* === Motion ===
+     Curves modelled on Apple HIG / macOS:
+       - ease-out-expo    : the "settle into place" curve used for arrivals
+       - ease-out-quart   : softer arrival, used for larger objects
+       - ease-emphasized  : Material's emphasized curve, for key transitions
+       - ease-spring-soft : gentle overshoot for FAB-style bounce
+  */
+  --ease-out-expo:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart:   cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint:   cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized:  cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring-soft: cubic-bezier(0.34, 1.2, 0.64, 1);
+  --ease-press:       cubic-bezier(0.4, 0, 1, 1);
+
+  --duration-press: 90ms;
+  --duration-fast:  150ms;
+  --duration-base:  220ms;
+  --duration-slow:  380ms;
+  --duration-slower: 640ms;
+
+  /* Scoped multi-property transition.
+     NEVER use `transition: all` — it animates layout props (height, padding,
+     grid) and creates jank. Only transform/opacity/colors/shadow are GPU-cheap. */
+  --transition:
+    transform     var(--duration-base) var(--ease-out-expo),
+    background    var(--duration-base) var(--ease-out-expo),
+    border-color  var(--duration-base) var(--ease-out-expo),
+    color         var(--duration-base) var(--ease-out-expo),
+    box-shadow    var(--duration-base) var(--ease-out-expo),
+    opacity       var(--duration-base) var(--ease-out-expo);
+
+  /* === Layout === */
+  --container-max: 1200px;
+  --container-wide: 1400px;
+  --container-narrow: 880px;
+  --header-height: 78px;
+
+  /* === iOS / Android safe areas (notch, dynamic-island, home-indicator) === */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+
+  /* === Touch target floor (Apple HIG: 44pt, Material: 48dp) === */
+  --touch-target: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
 }

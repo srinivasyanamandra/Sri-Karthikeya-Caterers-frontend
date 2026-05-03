@@ -1,0 +1,19 @@
+/* ============================================================================
+   Admin Styles - Main Entry Point
+   Standardized component library for admin interface
+   ============================================================================ */
+
+// 1. Design Tokens (must be first)
+@import './tokens';
+
+// 2. Shared Components
+@import './buttons';
+@import './badges';
+@import './loading';
+@import './empty-state';
+
+// Note: Additional component styles will be added here as we build them:
+// @import './modals';
+// @import './tables';
+// @import './forms';
+// @import './pagination';

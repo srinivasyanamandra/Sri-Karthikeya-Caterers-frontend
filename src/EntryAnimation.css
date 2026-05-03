@@ -1,220 +1,259 @@
+/* ============================================================
+   Entry Animation — single centred column composition
+   Hierarchy:  glow → symbol → brand → divider → mantra
+   Cascade in on mount, exit in reverse layered fade.
+   No filter:blur on alpha PNGs (creates a halo/outline artifact).
+   ============================================================ */
+
 .entry-animation {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgb(253, 248, 240);
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  inset: 0;
   z-index: 9999;
-  animation: fadeOut 0.6s ease 4.8s forwards;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(245, 234, 211, 0.55), transparent 80%),
+    radial-gradient(circle at 50% 50%,           rgba(232, 215, 184, 0.18), transparent 70%),
+    rgb(253, 248, 240);
   overflow: hidden;
+  will-change: opacity;
+  animation: entryBackdrop 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 
-.damru {
+@keyframes entryBackdrop {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.entry-animation.is-exiting {
+  animation: entryExit 500ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+@keyframes entryExit {
+  to { opacity: 0; visibility: hidden; }
+}
+
+/* ─── Stage: a single centred column, max-width capped for poetry ─── */
+.entry-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(18px, 3.2vh, 36px);
+  text-align: center;
+  max-width: 640px;
+  padding: 24px;
+}
+
+/* ─── Saffron ambient glow behind the symbol ───
+   Soft, large, breathing slowly. Anchors the focal point. */
+.entry-glow {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 90vw;
-  height: 90vh;
-  object-fit: contain;
-  object-position: bottom right;
-  animation: damruSway 3s ease-in-out infinite;
-  transform-origin: center bottom;
-}
-
-@keyframes damruSway {
-  0%, 100% {
-    transform: rotate(-2deg) translateY(0);
-  }
-  50% {
-    transform: rotate(2deg) translateY(-10px);
-  }
-}
-
-.sacred-text {
-  position: absolute;
-  bottom: 320px;
-  left: 140px;
-  z-index: 1;
-  font-family: 'Kaushan Script', cursive;
-  font-size: 48px;
-  font-weight: 400;
-  color: #1a472a;
-  text-align: left;
-  letter-spacing: 1px;
-  line-height: 1.6;
-  animation: textAppear 2.8s ease forwards;
+  top: -8%;
+  left: 50%;
+  width: clamp(280px, 50vmin, 480px);
+  height: clamp(280px, 50vmin, 480px);
+  background: radial-gradient(circle, rgba(201, 136, 47, 0.22) 0%, transparent 65%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+  transform: translateX(-50%) scale(0.85);
   opacity: 0;
-  margin: 0;
+  animation:
+    glowArrive 800ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards,
+    glowPulse  6s    ease-in-out                   1000ms infinite;
 }
 
-@keyframes textAppear {
+@keyframes glowArrive {
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { transform: translateX(-50%) scale(1);    opacity: 0.85; }
+  50%      { transform: translateX(-50%) scale(1.04); opacity: 1.00; }
+}
+
+/* ─── The trishul + damru — sacred icon, gentle continuous float ─── */
+.entry-symbol {
+  position: relative;
+  z-index: 1;
+  width: clamp(160px, 30vmin, 280px);
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 16px 36px rgba(20, 58, 38, 0.14));
+  animation:
+    symbolArrive 1000ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both,
+    symbolFloat  8s     ease-in-out                   1300ms infinite;
+}
+
+@keyframes symbolArrive {
   0% {
     opacity: 0;
-    transform: translateY(20px);
+    transform: scale(0.86) translateY(16px);
   }
-  15% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  85% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  60% { opacity: 1; }
   100% {
-    opacity: 0;
-    transform: translateY(-10px);
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
-@keyframes fadeOut {
-  to {
+/* Continuous float — slow, organic, never distracting */
+@keyframes symbolFloat {
+  0%, 100% { transform: translateY(0)    rotate(-0.4deg); }
+  50%      { transform: translateY(-6px) rotate(0.4deg); }
+}
+
+/* ─── Brand wordmark — display serif, settles in after the icon ─── */
+.entry-brand {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 500;
+  color: var(--color-primary);
+  letter-spacing: 0.04em;
+  margin: 0;
+  opacity: 0;
+  animation: textArrive 600ms cubic-bezier(0.22, 1, 0.36, 1) 700ms forwards;
+}
+
+/* ─── Decorative divider — two short rules + saffron diamond mark ─── */
+.entry-divider {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: -4px;
+}
+
+.entry-divider-rule {
+  display: block;
+  width: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--color-accent));
+  animation: ruleGrow 500ms cubic-bezier(0.22, 1, 0.36, 1) 800ms forwards;
+}
+.entry-divider-rule-right {
+  background: linear-gradient(to right, var(--color-accent), transparent);
+}
+
+@keyframes ruleGrow { to { width: 56px; } }
+
+.entry-divider-mark {
+  font-size: 9px;
+  color: var(--color-accent);
+  opacity: 0;
+  animation: textArrive 400ms cubic-bezier(0.22, 1, 0.36, 1) 900ms forwards;
+}
+
+/* ─── Sacred mantra — script font, sits as the final reveal ─── */
+.entry-mantra {
+  position: relative;
+  z-index: 1;
+  font-family: 'Kaushan Script', cursive;
+  font-size: clamp(22px, 3.4vw, 34px);
+  font-weight: 400;
+  color: var(--color-primary);
+  line-height: 1.55;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  margin: 0;
+  opacity: 0;
+  animation: textArrive 600ms cubic-bezier(0.22, 1, 0.36, 1) 900ms forwards;
+}
+
+/* Shared text arrival — fade up + blur clear */
+@keyframes textArrive {
+  from { opacity: 0; transform: translateY(8px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
+}
+
+/* ─── Layered exit — bottom-up cascade ───
+   Mantra → divider → brand → symbol → glow → backdrop. */
+.entry-animation.is-exiting .entry-mantra {
+  animation: textExit 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+.entry-animation.is-exiting .entry-divider {
+  animation: textExit 200ms cubic-bezier(0.4, 0, 1, 1) 40ms forwards;
+}
+.entry-animation.is-exiting .entry-brand {
+  animation: textExit 200ms cubic-bezier(0.4, 0, 1, 1) 80ms forwards;
+}
+.entry-animation.is-exiting .entry-symbol {
+  animation: symbolExit 400ms cubic-bezier(0.5, 0, 0.75, 0) 100ms forwards;
+}
+.entry-animation.is-exiting .entry-glow {
+  animation: glowExit 320ms cubic-bezier(0.5, 0, 0.75, 0) 180ms forwards;
+}
+
+@keyframes textExit {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes symbolExit {
+  to { opacity: 0; transform: scale(0.96) translateY(-10px); }
+}
+@keyframes glowExit {
+  to { opacity: 0; transform: translateX(-50%) scale(1.1); }
+}
+
+/* ─────────────────────────────────────────────
+   Reduced motion — short cross-fade, no movement
+   ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .entry-animation,
+  .entry-glow,
+  .entry-symbol,
+  .entry-brand,
+  .entry-divider-rule,
+  .entry-divider-mark,
+  .entry-mantra,
+  .entry-animation.is-exiting,
+  .entry-animation.is-exiting .entry-mantra,
+  .entry-animation.is-exiting .entry-divider,
+  .entry-animation.is-exiting .entry-brand,
+  .entry-animation.is-exiting .entry-symbol,
+  .entry-animation.is-exiting .entry-glow {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .entry-divider-rule { width: 56px; }
+  .entry-glow { transform: translateX(-50%); opacity: 0.85; }
+  .entry-animation.is-exiting {
     opacity: 0;
     visibility: hidden;
+    transition: opacity 240ms ease, visibility 0s 240ms;
   }
 }
 
-@media (max-width: 768px) {
-  .damru {
-    bottom: 200px;
-    width: 95vw;
-    left: 0;
-    height: 130vh;
-  }
-  
-  .sacred-text {
-    font-size: 32.32px;
-    left: 50px;
-    bottom: 105px;
-  }
+/* ─────────────────────────────────────────────
+   Responsive — keep proportions on every viewport
+   ───────────────────────────────────────────── */
+
+/* Phones in portrait */
+@media (max-width: 640px) {
+  .entry-stage { gap: clamp(14px, 2.8vh, 28px); padding: 20px; }
+  .entry-symbol { width: clamp(140px, 38vmin, 220px); }
+  .entry-glow { width: clamp(240px, 60vmin, 360px); height: clamp(240px, 60vmin, 360px); }
+  .entry-brand { font-size: clamp(18px, 4.5vw, 22px); }
+  .entry-mantra { font-size: clamp(20px, 5.6vw, 28px); }
 }
 
-@media (max-width: 480px) {
-  .damru {
-    bottom: 250px;
-    width: 100vw;
-    left: 0;
-    height: 150vh;
-  }
-  
-  .sacred-text {
-    font-size: 28.28px;
-    left: 70px;
-    bottom: 136.5px;
-  }
-}
-
-@media (max-width: 430px) {
-  .damru {
-    bottom: 245px;
-    width: 100vw;
-    left: 0;
-    height: 147.5vh;
-  }
-  
-  .sacred-text {
-    font-size: 27.27px;
-    left: 85px;
-    margin-bottom: 115.35px;
-  }
-}
-
-@media (max-width: 414px) {
-  .damru {
-    bottom: 250px;
-    width: 100vw;
-    left: 0;
-    height: 150vh;
-  }
-  
-  .sacred-text {
-    font-size: 28.28px;
-    left: 70px;
-    bottom: 136.5px;
-  }
-}
-
-@media (max-width: 390px) {
-  .damru {
-    bottom: 240px;
-    width: 100vw;
-    left: 0;
-    height: 145vh;
-  }
-  
-  .sacred-text {
-    font-size: 26.26px;
-    left: 60px;
-    bottom: 126px;
-  }
-}
-
-@media (max-width: 375px) {
-  .damru {
-    bottom: 230px;
-    width: 100vw;
-    left: 0;
-    height: 140vh;
-  }
-  
-  .sacred-text {
-    font-size: 24.24px;
-    left: 50px;
-    margin-bottom: 80.5px;
-  }
-}
-
-@media (max-width: 360px) {
-  .damru {
-    bottom: 220px;
-    width: 100vw;
-    left: 0;
-    height: 135vh;
-  }
-  
-  .sacred-text {
-    font-size: 22.22px;
-    left: 45px;
-    bottom: 105px;
-  }
-}
-
-@media (max-width: 320px) {
-  .damru {
-    bottom: 200px;
-    width: 100vw;
-    left: 0;
-    height: 130vh;
-  }
-  
-  .sacred-text {
-    font-size: 20.2px;
-    left: 40px;
-    bottom: 94.5px;
-  }
-}
-
-@media (min-height: 800px) and (max-width: 480px) {
-  .damru {
-    bottom: 280px;
-    height: 160vh;
-  }
-  
-  .sacred-text {
-    bottom: 150px;
-  }
-}
-
-@media (min-height: 900px) and (max-width: 480px) {
-  .damru {
-    bottom: 300px;
-    height: 170vh;
-  }
-  
-  .sacred-text {
-    bottom: 160px;
-  }
+/* Phone landscape — short viewport */
+@media (orientation: landscape) and (max-height: 500px) {
+  .entry-stage { gap: 12px; padding: 16px; }
+  .entry-symbol { width: clamp(100px, 22vh, 160px); }
+  .entry-glow { width: clamp(200px, 80vh, 320px); height: clamp(200px, 80vh, 320px); }
+  .entry-brand { font-size: 18px; }
+  .entry-mantra { font-size: clamp(18px, 4.2vh, 26px); }
 }

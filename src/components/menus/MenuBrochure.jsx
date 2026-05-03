@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { CONTACT } from '../../constants/contact';
 import { useNavigate } from '../../contexts/NavigationContext';
 import { ROUTES } from '../../constants/navigation';
@@ -26,8 +26,8 @@ const MenuBrochure = ({ collection, onClose }) => {
 
   const totalSheets = collection.pages.length + 2; /* cover + closing */
 
-  const goPrev = () => setPageIndex((p) => Math.max(0, p - 1));
-  const goNext = () => setPageIndex((p) => Math.min(totalSheets - 1, p + 1));
+  const goPrev = useCallback(() => setPageIndex((p) => Math.max(0, p - 1)), []);
+  const goNext = useCallback(() => setPageIndex((p) => Math.min(totalSheets - 1, p + 1)), [totalSheets]);
 
   /* Keyboard nav. */
   useEffect(() => {
@@ -38,7 +38,7 @@ const MenuBrochure = ({ collection, onClose }) => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, goPrev, goNext]);
 
   /* Scroll to top of the brochure on every page change. */
   useEffect(() => {

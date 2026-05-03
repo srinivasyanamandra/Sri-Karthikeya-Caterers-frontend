@@ -2,6 +2,8 @@
   "extends": ["react-app", "react-app/jest"],
   "rules": {
     "react/prop-types": "off",
-    "no-unused-vars": "warn"
+    "no-unused-vars": "warn",
+    "jsx-a11y/aria-unsupported-elements": "warn",
+    "react-hooks/exhaustive-deps": "warn"
   }
 }

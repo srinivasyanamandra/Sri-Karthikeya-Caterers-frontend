@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import PageHero from '../components/layout/PageHero';
-import ImageWithFallback from '../components/ui/ImageWithFallback';
 import reviews from '../data/reviews';
 import reviewFilters from '../data/reviewFilters';
 

@@ -1,6 +1,5 @@
 import React from 'react';
 import Reveal from '../ui/Reveal';
-import ImageWithFallback from '../ui/ImageWithFallback';
 import { useNavigate } from '../../contexts/NavigationContext';
 import { featuredReviews } from '../../data/reviews';
 import { ROUTES } from '../../constants/navigation';

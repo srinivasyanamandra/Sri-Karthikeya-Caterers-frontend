@@ -24,7 +24,8 @@ const Hero = () => {
   const navigate = useNavigate();
   return (
     <section className="hero">
-      <picture className="hero-bg" aria-hidden="true">
+      <div className="hero-bg" aria-hidden="true">
+        <picture>
         {/* WebP source — falls through silently if the file doesn't exist
             yet. Generate with:
               cwebp -q 82 public/best.png -o public/best.webp
@@ -37,7 +38,8 @@ const Hero = () => {
           loading="eager"
           decoding="async"
         />
-      </picture>
+        </picture>
+      </div>
 
       {/* Circular brand badge — desktop only via CSS (.hero-mark-wrap).
           The outer div owns absolute positioning; Reveal wraps the inner

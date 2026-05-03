@@ -104,8 +104,6 @@ const PAGE_REGISTRY = {
  */
 const PageFallback = () => <div className="page-fallback" aria-hidden="true" />;
 
-const SPLASH_SEEN_KEY = 'splash-seen';
-
 /**
  * Decide whether to show the opening splash for this page load.
  *

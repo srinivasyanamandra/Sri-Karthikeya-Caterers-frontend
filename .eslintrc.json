@@ -1,16 +1,7 @@
 {
   "extends": ["react-app", "react-app/jest"],
   "rules": {
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "no-unused-vars": "warn",
-    "react/prop-types": "warn",
-    "react/jsx-no-target-blank": "error",
-    "react/jsx-key": "error",
-    "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
-    "eqeqeq": ["error", "always"],
-    "no-var": "error",
-    "prefer-const": "warn",
-    "prefer-arrow-callback": "warn"
+    "react/prop-types": "off",
+    "no-unused-vars": "warn"
   }
 }

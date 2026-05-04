@@ -158,10 +158,11 @@ button {
    Header
    ───────────────────────────────────────────── */
 .header {
-  background: rgba(250, 247, 241, 0.78);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border-bottom: 1px solid transparent;
+  /* Solid background — a translucent + backdrop-filter header against the
+     very-dark hero produces a visible contrast boundary at the filter's
+     bottom edge that reads as a hairline. Solid cream avoids that entirely
+     and matches the surrounding page background. */
+  background: var(--color-bg-primary);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -171,16 +172,13 @@ button {
   padding-right: var(--safe-right);
   transition:
     background 280ms var(--ease-out-expo),
-    border-color 280ms var(--ease-out-expo),
     box-shadow 280ms var(--ease-out-expo);
 }
 
 .header.scrolled {
-  background: rgba(250, 247, 241, 0.94);
-  border-bottom-color: var(--color-border-light);
-  box-shadow:
-    0 1px 0 rgba(20, 58, 38, 0.04),
-    0 8px 24px rgba(20, 58, 38, 0.04);
+  /* Subtle elevation only on scroll — no border, no inset hairline, so
+     there is nothing rendering between the header and the hero below. */
+  box-shadow: 0 8px 24px rgba(20, 58, 38, 0.06);
 }
 
 .header-content {

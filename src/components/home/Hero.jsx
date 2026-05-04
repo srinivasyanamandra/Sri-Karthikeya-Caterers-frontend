@@ -31,13 +31,6 @@ const Hero = () => {
               cwebp -q 82 public/best.png -o public/best.webp
             For multi-density support add `srcSet="…800.webp 800w, …1600.webp 1600w" sizes="100vw"`. */}
         <source srcSet="/best.webp" type="image/webp" />
-        <img
-          src="/best.png"
-          alt=""
-          fetchpriority="high"
-          loading="eager"
-          decoding="async"
-        />
         </picture>
       </div>
 

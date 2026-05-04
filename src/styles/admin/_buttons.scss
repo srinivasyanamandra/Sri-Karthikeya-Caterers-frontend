@@ -17,7 +17,13 @@
   border: none;
   border-radius: $radius-full;
   cursor: pointer;
-  transition: all $transition-base;
+  transition:
+    transform $transition-base,
+    background $transition-base,
+    border-color $transition-base,
+    color $transition-base,
+    box-shadow $transition-base,
+    opacity $transition-base;
   white-space: nowrap;
   text-decoration: none;
   position: relative;

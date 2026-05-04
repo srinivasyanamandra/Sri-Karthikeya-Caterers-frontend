@@ -23,6 +23,14 @@ const RATING_LABELS = {
  *
  * The radio inputs are visually hidden (opacity 0, but tab-reachable);
  * the gold star icons are the visible UI driven by `n <= display`.
+ *
+ * @param {object} props
+ * @param {string} props.label - Field label rendered as <legend>.
+ * @param {string} props.name - Form field name; passed back as the first arg of onChange.
+ * @param {number} [props.value=0] - Selected rating (1..max), or 0/undefined if unset.
+ * @param {(name: string, value: number) => void} props.onChange
+ * @param {boolean} [props.required=false]
+ * @param {number} [props.max=5]
  */
 const RatingInput = ({ label, name, value, onChange, required = false, max = 5 }) => {
   const [hovered, setHovered] = useState(0);

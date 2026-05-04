@@ -18,6 +18,10 @@ const BODY_OPEN_CLASS = 'has-brochure-open';
  * Navigation
  *   Cover is page 0; brochure pages are 1..N; closing card is N+1.
  *   Prev / next buttons + a dot indicator. ← / → keys also work.
+ *
+ * @param {object} props
+ * @param {import('./CollectionCard.jsx').MenuCollection} props.collection
+ * @param {() => void} props.onClose
  */
 const MenuBrochure = ({ collection, onClose }) => {
   const navigate = useNavigate();

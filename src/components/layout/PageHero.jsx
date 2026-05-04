@@ -3,7 +3,11 @@ import { CONTACT } from '../../constants/contact';
 
 /**
  * PageHero — shared dark hero banner used by every inner page.
- * Strict prop interface: eyebrow + title + intro.
+ *
+ * @param {object} props
+ * @param {string} props.eyebrow - Small kicker text above the title.
+ * @param {string} props.title - Page H1.
+ * @param {string} [props.intro] - Optional one-paragraph subtitle.
  */
 const PageHero = ({ eyebrow, title, intro }) => (
   <section className="page-hero">

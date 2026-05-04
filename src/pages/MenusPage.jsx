@@ -19,9 +19,7 @@ import menuCollections from '../data/menuCollections';
  */
 const MenusPage = () => {
   const [activeId, setActiveId] = useState(null);
-  const active = activeId
-    ? menuCollections.find((c) => c.id === activeId)
-    : null;
+  const active = activeId ? menuCollections.find((c) => c.id === activeId) : null;
 
   /* When opening a brochure, lock body scroll so the brochure has the
      stage to itself. The brochure has its own internal scroll. */
@@ -35,12 +33,7 @@ const MenusPage = () => {
   }, [active]);
 
   if (active) {
-    return (
-      <MenuBrochure
-        collection={active}
-        onClose={() => setActiveId(null)}
-      />
-    );
+    return <MenuBrochure collection={active} onClose={() => setActiveId(null)} />;
   }
 
   return (

@@ -14,28 +14,32 @@
   justify-content: center;
   background:
     radial-gradient(ellipse 80% 70% at 50% 45%, rgba(245, 234, 211, 0.55), transparent 80%),
-    radial-gradient(circle at 50% 50%,           rgba(232, 215, 184, 0.18), transparent 70%),
+    radial-gradient(circle at 50% 50%, rgba(232, 215, 184, 0.18), transparent 70%),
     rgb(253, 248, 240);
   overflow: hidden;
   will-change: opacity;
   animation: entryBackdrop 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  padding:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
     env(safe-area-inset-left);
 }
 
 @keyframes entryBackdrop {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .entry-animation.is-exiting {
   animation: entryExit 500ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
 }
 @keyframes entryExit {
-  to { opacity: 0; visibility: hidden; }
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 /* ─── Stage: a single centred column, max-width capped for poetry ─── */
@@ -66,16 +70,26 @@
   opacity: 0;
   animation:
     glowArrive 800ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards,
-    glowPulse  6s    ease-in-out                   1000ms infinite;
+    glowPulse 6s ease-in-out 1000ms infinite;
 }
 
 @keyframes glowArrive {
-  to { opacity: 1; transform: translateX(-50%) scale(1); }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
 }
 
 @keyframes glowPulse {
-  0%, 100% { transform: translateX(-50%) scale(1);    opacity: 0.85; }
-  50%      { transform: translateX(-50%) scale(1.04); opacity: 1.00; }
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.04);
+    opacity: 1;
+  }
 }
 
 /* ─── The trishul + damru — sacred icon, gentle continuous float ─── */
@@ -89,7 +103,7 @@
   filter: drop-shadow(0 16px 36px rgba(20, 58, 38, 0.14));
   animation:
     symbolArrive 1000ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both,
-    symbolFloat  8s     ease-in-out                   1300ms infinite;
+    symbolFloat 8s ease-in-out 1300ms infinite;
 }
 
 @keyframes symbolArrive {
@@ -97,7 +111,9 @@
     opacity: 0;
     transform: scale(0.86) translateY(16px);
   }
-  60% { opacity: 1; }
+  60% {
+    opacity: 1;
+  }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -106,8 +122,13 @@
 
 /* Continuous float — slow, organic, never distracting */
 @keyframes symbolFloat {
-  0%, 100% { transform: translateY(0)    rotate(-0.4deg); }
-  50%      { transform: translateY(-6px) rotate(0.4deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.4deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(0.4deg);
+  }
 }
 
 /* ─── Brand wordmark — display serif, settles in after the icon ─── */
@@ -146,7 +167,11 @@
   background: linear-gradient(to right, var(--color-accent), transparent);
 }
 
-@keyframes ruleGrow { to { width: 56px; } }
+@keyframes ruleGrow {
+  to {
+    width: 56px;
+  }
+}
 
 .entry-divider-mark {
   font-size: 9px;
@@ -173,8 +198,16 @@
 
 /* Shared text arrival — fade up + blur clear */
 @keyframes textArrive {
-  from { opacity: 0; transform: translateY(8px); filter: blur(6px); }
-  to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 
 /* ─── Layered exit — bottom-up cascade ───
@@ -196,13 +229,22 @@
 }
 
 @keyframes textExit {
-  to { opacity: 0; transform: translateY(-6px); }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 @keyframes symbolExit {
-  to { opacity: 0; transform: scale(0.96) translateY(-10px); }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-10px);
+  }
 }
 @keyframes glowExit {
-  to { opacity: 0; transform: translateX(-50%) scale(1.1); }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.1);
+  }
 }
 
 /* ─────────────────────────────────────────────
@@ -227,12 +269,19 @@
     transform: none;
     filter: none;
   }
-  .entry-divider-rule { width: 56px; }
-  .entry-glow { transform: translateX(-50%); opacity: 0.85; }
+  .entry-divider-rule {
+    width: 56px;
+  }
+  .entry-glow {
+    transform: translateX(-50%);
+    opacity: 0.85;
+  }
   .entry-animation.is-exiting {
     opacity: 0;
     visibility: hidden;
-    transition: opacity 240ms ease, visibility 0s 240ms;
+    transition:
+      opacity 240ms ease,
+      visibility 0s 240ms;
   }
 }
 
@@ -242,18 +291,42 @@
 
 /* Phones in portrait */
 @media (max-width: 640px) {
-  .entry-stage { gap: clamp(14px, 2.8vh, 28px); padding: 20px; }
-  .entry-symbol { width: clamp(140px, 38vmin, 220px); }
-  .entry-glow { width: clamp(240px, 60vmin, 360px); height: clamp(240px, 60vmin, 360px); }
-  .entry-brand { font-size: clamp(18px, 4.5vw, 22px); }
-  .entry-mantra { font-size: clamp(20px, 5.6vw, 28px); }
+  .entry-stage {
+    gap: clamp(14px, 2.8vh, 28px);
+    padding: 20px;
+  }
+  .entry-symbol {
+    width: clamp(140px, 38vmin, 220px);
+  }
+  .entry-glow {
+    width: clamp(240px, 60vmin, 360px);
+    height: clamp(240px, 60vmin, 360px);
+  }
+  .entry-brand {
+    font-size: clamp(18px, 4.5vw, 22px);
+  }
+  .entry-mantra {
+    font-size: clamp(20px, 5.6vw, 28px);
+  }
 }
 
 /* Phone landscape — short viewport */
 @media (orientation: landscape) and (max-height: 500px) {
-  .entry-stage { gap: 12px; padding: 16px; }
-  .entry-symbol { width: clamp(100px, 22vh, 160px); }
-  .entry-glow { width: clamp(200px, 80vh, 320px); height: clamp(200px, 80vh, 320px); }
-  .entry-brand { font-size: 18px; }
-  .entry-mantra { font-size: clamp(18px, 4.2vh, 26px); }
+  .entry-stage {
+    gap: 12px;
+    padding: 16px;
+  }
+  .entry-symbol {
+    width: clamp(100px, 22vh, 160px);
+  }
+  .entry-glow {
+    width: clamp(200px, 80vh, 320px);
+    height: clamp(200px, 80vh, 320px);
+  }
+  .entry-brand {
+    font-size: 18px;
+  }
+  .entry-mantra {
+    font-size: clamp(18px, 4.2vh, 26px);
+  }
 }

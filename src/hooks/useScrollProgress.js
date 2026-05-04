@@ -13,7 +13,9 @@ export default function useScrollProgress(propertyName = '--scroll') {
       document.documentElement.style.setProperty(propertyName, `${pct}%`);
       raf = 0;
     };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     update();
     return () => {

@@ -10,6 +10,9 @@ import { createPortal } from 'react-dom';
  * Public pages animate `<main className="page-shell">` with a translate
  * keyframe + animation-fill-mode: both, so its transform is permanent.
  * Portaling the overlay to <body> sidesteps the trap entirely.
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
  */
 const Portal = ({ children }) => {
   const [mounted, setMounted] = useState(false);

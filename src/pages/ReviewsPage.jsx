@@ -7,9 +7,10 @@ const ReviewsPage = () => {
   const [activeFilter, setActiveFilter] = useState('all');
 
   const filteredReviews = useMemo(
-    () => activeFilter === 'all'
-      ? reviews
-      : reviews.filter((review) => review.event.toLowerCase().includes(activeFilter)),
+    () =>
+      activeFilter === 'all'
+        ? reviews
+        : reviews.filter((review) => review.event.toLowerCase().includes(activeFilter)),
     [activeFilter]
   );
 
@@ -64,7 +65,9 @@ const ReviewsPage = () => {
                 <p className="review-text">"{review.review}"</p>
                 <div className="review-highlights">
                   {review.highlights.map((h) => (
-                    <span key={h} className="highlight-tag">{h}</span>
+                    <span key={h} className="highlight-tag">
+                      {h}
+                    </span>
                   ))}
                 </div>
               </article>

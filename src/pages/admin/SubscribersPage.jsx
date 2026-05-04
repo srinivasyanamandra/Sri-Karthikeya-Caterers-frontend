@@ -529,8 +529,10 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
       recipients: recipients.map((r) => ({ kind: r.kind, id: r.id, email: r.email })),
       scheduleAt: scheduleMode === 'scheduled' ? `${sendDate}T${sendTime}:00` : null,
     };
-    /* eslint-disable-next-line no-console */
-    console.log('Sending campaign payload:', payload);
+    if (process.env.NODE_ENV !== 'production') {
+      /* eslint-disable-next-line no-console */
+      console.info('[campaign] payload', payload);
+    }
     await new Promise((r) => setTimeout(r, 1400));
     setSending(false);
     setDone(true);

@@ -12,10 +12,10 @@ const INITIAL_STATE = {
   name: '',
   eventType: '',
   eventDate: '',
-  
+
   // Section 2: Overall Experience
   overallRating: 0,
-  
+
   // Section 3: Detailed Ratings
   foodQualityRating: 0,
   tasteRating: 0,
@@ -23,11 +23,11 @@ const INITIAL_STATE = {
   staffBehaviorRating: 0,
   timelinessRating: 0,
   serviceQualityRating: 0,
-  
+
   // Section 4: Written Feedback
   comments: '',
   suggestions: '',
-  
+
   // Section 5: Optional
   // photo: null, // Commented out - photo upload disabled
   recommend: '',
@@ -86,9 +86,12 @@ const ClientReviewsPage = () => {
   const submitTimerRef = useRef(null);
 
   /* Cancel in-flight submit on unmount */
-  useEffect(() => () => {
-    if (submitTimerRef.current) window.clearTimeout(submitTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (submitTimerRef.current) window.clearTimeout(submitTimerRef.current);
+    },
+    []
+  );
 
   const updateField = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -169,13 +172,14 @@ const ClientReviewsPage = () => {
         <section className="section section-alt">
           <div className="container">
             <div className="feedback-thanks">
-              <div className="feedback-thanks-mark" aria-hidden="true">◆</div>
+              <div className="feedback-thanks-mark" aria-hidden="true">
+                ◆
+              </div>
               <h2 className="feedback-thanks-title">{successMessage.title}</h2>
               <p className="feedback-thanks-body">{successMessage.body}</p>
               <p className="feedback-thanks-meta">
                 Questions or concerns? Reach us at{' '}
-                <a href={`tel:${CONTACT.primaryPhone.tel}`}>{CONTACT.primaryPhone.label}</a>
-                {' '}or{' '}
+                <a href={`tel:${CONTACT.primaryPhone.tel}`}>{CONTACT.primaryPhone.label}</a> or{' '}
                 <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a>.
               </p>
               <button type="button" className="btn btn-secondary" onClick={submitAnother}>
@@ -206,18 +210,16 @@ const ClientReviewsPage = () => {
             <div className="client-reviews-intro-icon" aria-hidden="true">
               <i className="fas fa-star" />
             </div>
-            <h2 className="client-reviews-intro-title">
-              Your voice matters
-            </h2>
+            <h2 className="client-reviews-intro-title">Your voice matters</h2>
             <p className="client-reviews-intro-body">
-              We read every review personally. Your honest feedback — the highlights and the areas 
-              for improvement — helps us deliver exceptional catering experiences for every celebration.
+              We read every review personally. Your honest feedback — the highlights and the areas
+              for improvement — helps us deliver exceptional catering experiences for every
+              celebration.
             </p>
           </div>
 
           {/* Main review form */}
           <form className="client-reviews-form" onSubmit={handleSubmit} noValidate>
-            
             {/* ═══ Section 1: Basic Information ═══ */}
             <div className="feedback-section">
               <div className="feedback-section-head">
@@ -245,7 +247,9 @@ const ClientReviewsPage = () => {
                   <select required {...fieldProps('eventType')}>
                     <option value="">Select event type</option>
                     {eventTypes.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
                     ))}
                   </select>
                   {fieldError('eventType')}
@@ -254,15 +258,9 @@ const ClientReviewsPage = () => {
 
               <div className="form-group">
                 <label htmlFor="eventDate">Event date *</label>
-                <input
-                  type="date"
-                  required
-                  {...fieldProps('eventDate', 'date')}
-                />
+                <input type="date" required {...fieldProps('eventDate', 'date')} />
                 {fieldError('eventDate')}
-                <span className="form-hint">
-                  When did we cater your event?
-                </span>
+                <span className="form-hint">When did we cater your event?</span>
               </div>
             </div>
 
@@ -405,11 +403,7 @@ const ClientReviewsPage = () => {
                 onChange={updateField}
               /> */}
 
-              <RecommendToggle
-                name="recommend"
-                value={formData.recommend}
-                onChange={updateField}
-              />
+              <RecommendToggle name="recommend" value={formData.recommend} onChange={updateField} />
             </div>
 
             {/* ═══ Submit ═══ */}
@@ -421,18 +415,18 @@ const ClientReviewsPage = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <i className="fas fa-circle-notch fa-spin" aria-hidden="true" />
-                    {' '}Submitting review…
+                    <i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> Submitting
+                    review…
                   </>
                 ) : (
                   <>
-                    Submit review
-                    {' '}<i className="fas fa-arrow-right" aria-hidden="true" />
+                    Submit review <i className="fas fa-arrow-right" aria-hidden="true" />
                   </>
                 )}
               </button>
               <p className="feedback-submit-meta">
-                Your review is read personally by our coordinator. We respond to every concern within 24 hours.
+                Your review is read personally by our coordinator. We respond to every concern
+                within 24 hours.
               </p>
             </div>
           </form>

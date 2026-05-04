@@ -27,7 +27,7 @@
 html {
   /* Prevent iOS Safari from auto-scaling text on rotation. */
   -webkit-text-size-adjust: 100%;
-          text-size-adjust: 100%;
+  text-size-adjust: 100%;
 
   /* Smooth scroll respected by browsers that honour it. */
   scroll-behavior: smooth;
@@ -36,7 +36,9 @@ html {
   overflow-x: hidden;
 }
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
@@ -56,12 +58,20 @@ body {
 }
 
 /* iOS — eliminate the grey tap flash on every interactive element. */
-a, button, [role='button'], input, textarea, select, label {
+a,
+button,
+[role='button'],
+input,
+textarea,
+select,
+label {
   -webkit-tap-highlight-color: transparent;
 }
 
 /* Native focus rings are too eager; show only for keyboard focus. */
-:focus { outline: none; }
+:focus {
+  outline: none;
+}
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
@@ -73,7 +83,9 @@ a, button, [role='button'], input, textarea, select, label {
   .full-screen,
   .modal-overlay,
   .menu-brochure,
-  .mobile-nav { height: 100dvh; }
+  .mobile-nav {
+    height: 100dvh;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -147,7 +159,7 @@ select {
   width: 100%;
   max-width: 100%;
   -webkit-appearance: none;
-          appearance: none;
+  appearance: none;
 }
 @media (min-width: 768px) {
   /* Recover the design's intended density on real keyboards. */
@@ -170,11 +182,24 @@ select {
 /* ─────────────────────────────────────────────────────────────
    5. Typography hierarchy — fluid even where designers forgot
    ───────────────────────────────────────────────────────────── */
-h1 { font-size: clamp(1.75rem, 4.4vw, 2.6rem); line-height: 1.15; }
-h2 { font-size: clamp(1.45rem, 3vw, 2.1rem);   line-height: 1.18; }
-h3 { font-size: clamp(1.1rem, 2vw, 1.35rem);   line-height: 1.25; }
-h4 { font-size: clamp(1rem, 1.4vw, 1.15rem);   line-height: 1.3;  }
-p, li {
+h1 {
+  font-size: clamp(1.75rem, 4.4vw, 2.6rem);
+  line-height: 1.15;
+}
+h2 {
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+  line-height: 1.18;
+}
+h3 {
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  line-height: 1.25;
+}
+h4 {
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
+  line-height: 1.3;
+}
+p,
+li {
   font-size: clamp(0.95rem, 1vw, 1rem);
   line-height: 1.65;
 }
@@ -191,7 +216,13 @@ p, li {
 }
 
 /* Prevent absurdly long unbreakable strings from blowing out width. */
-p, h1, h2, h3, h4, .hero-sub, .lead {
+p,
+h1,
+h2,
+h3,
+h4,
+.hero-sub,
+.lead {
   overflow-wrap: anywhere;
 }
 
@@ -207,8 +238,12 @@ iframe {
   height: auto;
   display: block;
 }
-img { object-fit: cover; }
-img[loading='eager'] { content-visibility: auto; }
+img {
+  object-fit: cover;
+}
+img[loading='eager'] {
+  content-visibility: auto;
+}
 
 /* Above-the-fold logo, hero, and other intentional sizings stay
    intact because their parents constrain width via flex/grid. */
@@ -222,11 +257,17 @@ img[loading='eager'] { content-visibility: auto; }
     padding-left: var(--container-pad);
     padding-right: var(--container-pad);
   }
-  .nav { display: none; }
-  .menu-toggle { display: inline-flex; }
+  .nav {
+    display: none;
+  }
+  .menu-toggle {
+    display: inline-flex;
+  }
 }
 @media (min-width: 1024px) {
-  .menu-toggle { display: none; }
+  .menu-toggle {
+    display: none;
+  }
 }
 
 /* Nav CTA visibility — keep "Call" + "Request Quote" on tablet+,
@@ -269,7 +310,9 @@ img[loading='eager'] { content-visibility: auto; }
     padding-left: var(--container-pad);
     padding-right: var(--container-pad);
   }
-  .hero-title { max-width: 18ch; }
+  .hero-title {
+    max-width: 18ch;
+  }
   .hero-cta {
     width: 100%;
     flex-direction: column;
@@ -289,8 +332,13 @@ img[loading='eager'] { content-visibility: auto; }
 /* iPhone landscape — short height, hide decorative elements. */
 @media (orientation: landscape) and (max-height: 500px) {
   .hero-mark-wrap,
-  .hero-trust { display: none; }
-  .hero { min-height: auto; padding: 80px 0 56px; }
+  .hero-trust {
+    display: none;
+  }
+  .hero {
+    min-height: auto;
+    padding: 80px 0 56px;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -321,7 +369,9 @@ img[loading='eager'] { content-visibility: auto; }
     grid-template-columns: repeat(2, 1fr);
     gap: 22px;
   }
-  .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -392,9 +442,15 @@ img[loading='eager'] { content-visibility: auto; }
    12. Footer stack
    ───────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .footer { padding-bottom: calc(28px + var(--safe-bottom)); }
-  .footer-grid { gap: 28px; }
-  .footer-col { text-align: left; }
+  .footer {
+    padding-bottom: calc(28px + var(--safe-bottom));
+  }
+  .footer-grid {
+    gap: 28px;
+  }
+  .footer-col {
+    text-align: left;
+  }
   .footer-bottom {
     flex-direction: column;
     align-items: flex-start;
@@ -431,7 +487,9 @@ img[loading='eager'] { content-visibility: auto; }
     font-size: 12.5px;
     height: 44px;
   }
-  .floating-cta i { font-size: 13px; }
+  .floating-cta i {
+    font-size: 13px;
+  }
   .back-to-top {
     right: 16px;
     bottom: max(148px, calc(148px + var(--safe-bottom)));
@@ -479,17 +537,31 @@ body.has-brochure-open .back-to-top {
   -webkit-overflow-scrolling: touch;
   padding-inline: var(--container-pad);
 }
-.scroll-row > * { scroll-snap-align: start; flex: 0 0 auto; }
+.scroll-row > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
 
 /* ─────────────────────────────────────────────────────────────
    15. Decorative elements scale-down
    ───────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .hero-mark-wrap { display: none; }
-  .scroll-progress { height: 2px; }
-  .page-hero { padding: 80px 0 56px; }
-  .page-hero-title { max-width: 100%; }
-  .eyebrow { font-size: 10px; letter-spacing: 0.16em; }
+  .hero-mark-wrap {
+    display: none;
+  }
+  .scroll-progress {
+    height: 2px;
+  }
+  .page-hero {
+    padding: 80px 0 56px;
+  }
+  .page-hero-title {
+    max-width: 100%;
+  }
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -526,8 +598,14 @@ body.has-brochure-open .back-to-top {
   .menu-brochure-pager {
     display: none !important;
   }
-  body { background: white; color: black; }
-  a { color: inherit; text-decoration: none; }
+  body {
+    background: white;
+    color: black;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* ============================================================
@@ -543,7 +621,13 @@ body.has-brochure-open .back-to-top {
   font-size: 12px;
   letter-spacing: 0.04em;
   opacity: 0.75;
-  transition: all 220ms var(--ease-out-expo);
+  transition:
+    transform 220ms var(--ease-out-expo),
+    background 220ms var(--ease-out-expo),
+    border-color 220ms var(--ease-out-expo),
+    color 220ms var(--ease-out-expo),
+    box-shadow 220ms var(--ease-out-expo),
+    opacity 220ms var(--ease-out-expo);
 }
 .footer-admin-link:hover {
   opacity: 1;
@@ -551,7 +635,9 @@ body.has-brochure-open .back-to-top {
   color: var(--color-accent-light);
   background: rgba(201, 136, 47, 0.08);
 }
-.footer-admin-link i { font-size: 10px; }
+.footer-admin-link i {
+  font-size: 10px;
+}
 
 /* ============================================================
    Floating action buttons — definitive, non-overlapping stack
@@ -563,16 +649,16 @@ body.has-brochure-open .back-to-top {
    collide regardless of viewport height or label length.
    ============================================================ */
 :root {
-  --fab-size:           58px;       /* WhatsApp circle */
-  --fab-cta-h:          48px;       /* "Plan your event" pill */
-  --fab-back-h:         44px;       /* Back-to-top */
-  --fab-edge:           28px;       /* distance from viewport edge */
-  --fab-gap:            14px;       /* breathing room between FABs */
+  --fab-size: 58px; /* WhatsApp circle */
+  --fab-cta-h: 48px; /* "Plan your event" pill */
+  --fab-back-h: 44px; /* Back-to-top */
+  --fab-edge: 28px; /* distance from viewport edge */
+  --fab-gap: 14px; /* breathing room between FABs */
 }
 
 .whatsapp-fab {
   bottom: max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-bottom))) !important;
-  right:  max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-right)))  !important;
+  right: max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-right))) !important;
 }
 
 .floating-cta {
@@ -581,26 +667,26 @@ body.has-brochure-open .back-to-top {
     calc(var(--fab-edge) + var(--fab-size) + var(--fab-gap)),
     calc(var(--fab-edge) + var(--fab-size) + var(--fab-gap) + var(--safe-bottom))
   ) !important;
-  right:  max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-right))) !important;
+  right: max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-right))) !important;
 }
 
 /* Back-to-top stays on the LEFT side (it always was) — no conflict
    with the right-side FAB stack. Just enforce safe-area alignment. */
 .back-to-top {
   bottom: max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-bottom))) !important;
-  left:   max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-left)))   !important;
+  left: max(var(--fab-edge), calc(var(--fab-edge) + var(--safe-left))) !important;
 }
 
 /* — Phones: shrink edge gutter to 16 px, keep the same stacking math. — */
 @media (max-width: 640px) {
   :root {
-    --fab-size:   52px;
-    --fab-cta-h:  44px;
-    --fab-edge:   18px;
-    --fab-gap:    12px;
+    --fab-size: 52px;
+    --fab-cta-h: 44px;
+    --fab-edge: 18px;
+    --fab-gap: 12px;
   }
   .whatsapp-fab {
-    width:  var(--fab-size);
+    width: var(--fab-size);
     height: var(--fab-size);
     font-size: 22px;
   }
@@ -610,5 +696,7 @@ body.has-brochure-open .back-to-top {
     font-size: 12.5px;
   }
   /* Hide the FAB tooltip on touch — the long-press menu is enough. */
-  .whatsapp-fab-tooltip { display: none; }
+  .whatsapp-fab-tooltip {
+    display: none;
+  }
 }

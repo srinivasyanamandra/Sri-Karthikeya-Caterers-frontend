@@ -27,26 +27,30 @@ Env vars are CRA-style (`REACT_APP_*`) — see [.env.example](.env.example). Cop
 
 ### Routing is state, not URLs
 
-There is **no react-router**. [src/App.js](src/App.js) holds `currentPage` in `useState` and renders the matching component from `PAGE_REGISTRY` (a `ROUTES → PageComponent` map). Every navigable component receives `setCurrentPage` as a prop and calls it on click; `<a href="#route">` is used purely for accessibility / right-click — handlers always `preventDefault()`. Adding a new page means: add a `ROUTES` entry in [src/constants/navigation.js](src/constants/navigation.js), add a `PRIMARY_NAV` row, create the page component under [src/pages/](src/pages/), and add one line to `PAGE_REGISTRY`.
+There is **no react-router**. [src/App.js](src/App.js) holds `currentPage` in `useState` and renders the matching component from `PAGE_REGISTRY` (a `ROUTES → PageComponent` map). Navigation is exposed via [NavigationContext](src/contexts/NavigationContext.js) — descendants call `useNavigate()` (reference-stable, no re-render on nav change), `useCurrentPage()` (subscribes to changes), or `useNavigation()` for both. `setCurrentPage` is **not** passed as a prop. `<a href="#route">` is used purely for accessibility / right-click — handlers always `preventDefault()`. Adding a new page means: add a `ROUTES` entry in [src/constants/navigation.js](src/constants/navigation.js), add a `PRIMARY_NAV` row, create the page component under [src/pages/](src/pages/), and add one line to `PAGE_REGISTRY`.
 
-The `<main className="page-shell" key={currentPage}>` trick remounts the page subtree on every route change — that's what drives the fade-up enter animation.
+The `<main className="page-shell" key={currentPage}>` trick remounts the page subtree on every route change — that's what drives the fade-up enter animation. The URL hash is kept in sync with `currentPage` for shareable refresh-safe links (`/#admin-login`), and `hashchange` events drive back/forward navigation.
 
 ### Layered structure
 
 ```
 src/
 ├── App.js                  # router + global chrome only
-├── pages/*.jsx             # thin compositions of section components
+├── pages/                  # public pages (.jsx) + pages/admin/ for the admin shell
 ├── components/
 │   ├── layout/             # Header, Footer, PageHero, ScrollProgress
 │   ├── home/               # Hero, Story, ServicesPreview, MenuPreview, etc.
 │   ├── floating/           # WhatsAppFAB, FloatingCTA, BackToTop
-│   └── ui/Reveal.jsx       # scroll-reveal wrapper (only shared UI primitive)
+│   ├── menus/              # CollectionCard, FullMenu, MenuBrochure
+│   ├── feedback/           # PhotoUpload, RatingInput, RecommendToggle
+│   ├── admin/              # AdminLayout, AdminTopbar, AdminSidebar, shared/*
+│   └── ui/                 # Reveal, Portal, ImageWithFallback, RouteLoader
+├── contexts/               # NavigationContext (split state/dispatch)
 ├── data/*.js               # plain JS arrays (menus, services, gallery, reviews, …)
-├── constants/              # contact, navigation, whatsapp, index
-├── hooks/                  # useScrolled, useScrollReveal, useScrollProgress, useCountUp, useShowAfterScroll
+├── constants/              # contact, navigation, whatsapp
+├── hooks/                  # useScrolled, useScrollReveal, useScrollProgress, useCountUp
 ├── config/api.config.js    # placeholder for future backend
-├── utils/                  # helpers, validation, propTypes
+├── utils/validation.js     # form validation helpers
 └── tokens.css              # design system (loaded globally)
 ```
 
@@ -57,7 +61,6 @@ Pages are deliberately thin — they import and stack section components from `c
 - **Contact info**: [src/constants/contact.js](src/constants/contact.js) — `CONTACT.brand`, `CONTACT.primaryPhone`, `CONTACT.email`, etc. Header, Footer, ContactPage, and FABs all read from here. Never hardcode phone/email/address elsewhere.
 - **WhatsApp**: [src/constants/whatsapp.js](src/constants/whatsapp.js) derives the E.164 number from `CONTACT` and exports `buildWhatsAppLink(message)`.
 - **Routes / nav order**: [src/constants/navigation.js](src/constants/navigation.js) (`ROUTES`, `PRIMARY_NAV`, `FOOTER_EXPLORE`).
-- Note: [src/constants/index.js](src/constants/index.js) is a legacy duplicate of some of this info — prefer the per-topic files above; treat `index.js` as deprecated.
 
 ### Design system — tokens.css
 
@@ -80,7 +83,6 @@ The header locks `body.style.overflow` while the mobile menu is open ([Header.js
 ## Conventions
 
 - Page/section components are `.jsx`; hooks, utils, data, constants are `.js`.
-- ESLint extends `react-app` + `react-app/jest` with stricter rules: `eqeqeq: ["error", "always"]`, `no-var: error`, `react/jsx-no-target-blank: error`, `react/prop-types: warn`, `no-console: warn` (allows `warn`/`error`). See [.eslintrc.json](.eslintrc.json).
+- ESLint extends `react-app` + `react-app/jest` with: `react/prop-types: off` (PropTypes are deprecated in React 19 — type props with JSDoc `@param` instead), `no-unused-vars: warn`, `react-hooks/exhaustive-deps: warn`, `jsx-a11y/aria-unsupported-elements: warn`. See [.eslintrc.json](.eslintrc.json).
 - Prettier: single quotes, 100-col, 2-space, `trailingComma: es5` ([.prettierrc.json](.prettierrc.json)).
 - Data files in `src/data/` export plain arrays — both home previews (`.slice(...)`) and dedicated pages consume the same array; mutate carefully.
-- The git status currently shows the legacy flat layout (`src/Pages.js`, `src/components/Header.js`, etc.) being deleted in favor of the `pages/` + `components/{layout,home,floating,ui}/` structure described above. New code should follow the new layout.

@@ -14,6 +14,13 @@ const ACCEPTED_PREFIX = 'image/';
  *
  * The component is fully controlled — `value` is `{ file, preview }` or
  * `null`. The parent owns the data; this component only emits change events.
+ *
+ * @typedef {{ file: File, preview: string }} PhotoValue
+ *
+ * @param {object} props
+ * @param {string} props.name - Form field name; passed back as the first arg of onChange.
+ * @param {PhotoValue|null} props.value
+ * @param {(name: string, value: PhotoValue|null) => void} props.onChange
  */
 const PhotoUpload = ({ name, value, onChange }) => {
   const [error, setError] = useState('');

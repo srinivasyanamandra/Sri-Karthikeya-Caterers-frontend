@@ -25,7 +25,7 @@
   --color-text-secondary: #4f5147;
   --color-text-light: #7c7e74;
   --color-text-muted: #a3a59a;
-  --color-text-inverse: #FFFFFF;
+  --color-text-inverse: #ffffff;
 
   /* Borders */
   --color-border: #e6dfd1;
@@ -40,7 +40,7 @@
 
   /* Shadows — softer, warmer */
   --color-shadow-sm: rgba(20, 58, 38, 0.06);
-  --color-shadow-md: rgba(20, 58, 38, 0.10);
+  --color-shadow-md: rgba(20, 58, 38, 0.1);
   --color-shadow-lg: rgba(20, 58, 38, 0.16);
   --color-shadow-xl: rgba(20, 58, 38, 0.22);
 
@@ -126,31 +126,31 @@
        - ease-emphasized  : Material's emphasized curve, for key transitions
        - ease-spring-soft : gentle overshoot for FAB-style bounce
   */
-  --ease-out-expo:    cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-out-quart:   cubic-bezier(0.25, 1, 0.5, 1);
-  --ease-out-quint:   cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-emphasized:  cubic-bezier(0.2, 0, 0, 1);
-  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-spring-soft: cubic-bezier(0.34, 1.2, 0.64, 1);
-  --ease-press:       cubic-bezier(0.4, 0, 1, 1);
+  --ease-press: cubic-bezier(0.4, 0, 1, 1);
 
   --duration-press: 90ms;
-  --duration-fast:  150ms;
-  --duration-base:  220ms;
-  --duration-slow:  380ms;
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 380ms;
   --duration-slower: 640ms;
 
   /* Scoped multi-property transition.
      NEVER use `transition: all` — it animates layout props (height, padding,
      grid) and creates jank. Only transform/opacity/colors/shadow are GPU-cheap. */
   --transition:
-    transform     var(--duration-base) var(--ease-out-expo),
-    background    var(--duration-base) var(--ease-out-expo),
-    border-color  var(--duration-base) var(--ease-out-expo),
-    color         var(--duration-base) var(--ease-out-expo),
-    box-shadow    var(--duration-base) var(--ease-out-expo),
-    opacity       var(--duration-base) var(--ease-out-expo);
+    transform var(--duration-base) var(--ease-out-expo),
+    background var(--duration-base) var(--ease-out-expo),
+    border-color var(--duration-base) var(--ease-out-expo),
+    color var(--duration-base) var(--ease-out-expo),
+    box-shadow var(--duration-base) var(--ease-out-expo),
+    opacity var(--duration-base) var(--ease-out-expo);
 
   /* === Layout === */
   --container-max: 1200px;
@@ -159,10 +159,10 @@
   --header-height: 78px;
 
   /* === iOS / Android safe areas (notch, dynamic-island, home-indicator) === */
-  --safe-top:    env(safe-area-inset-top, 0px);
-  --safe-right:  env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 
   /* === Touch target floor (Apple HIG: 44pt, Material: 48dp) === */
   --touch-target: 44px;

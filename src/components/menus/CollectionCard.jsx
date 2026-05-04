@@ -6,6 +6,21 @@ import React from 'react';
  * The optional cover image sits in the top-right of the card and is
  * masked with a down-and-left gradient so it fades softly into the
  * card body without competing with the typography.
+ *
+ * @typedef {object} MenuCollection
+ * @property {string} id
+ * @property {string} name
+ * @property {string} tagline
+ * @property {string} summary
+ * @property {string} accent - CSS color used as `--collection-accent`.
+ * @property {string} motif - Font Awesome icon class (e.g. 'fa-leaf').
+ * @property {string} [image]
+ * @property {string[]} bestFor
+ * @property {Array<{sections: unknown[]}>} pages
+ *
+ * @param {object} props
+ * @param {MenuCollection} props.collection
+ * @param {(c: MenuCollection) => void} props.onOpen
  */
 const CollectionCard = ({ collection, onOpen }) => {
   const totalSections = collection.pages.reduce(

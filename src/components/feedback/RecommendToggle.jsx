@@ -13,6 +13,13 @@ const OPTIONS = [
   { value: 'no',  icon: 'fa-thumbs-down', label: 'Not yet' },
 ];
 
+/**
+ * @param {object} props
+ * @param {string} props.name - Form field name; passed back as the first arg of onChange.
+ * @param {'yes'|'no'|undefined} props.value
+ * @param {(name: string, value: 'yes'|'no') => void} props.onChange
+ * @param {boolean} [props.required=false]
+ */
 const RecommendToggle = ({ name, value, onChange, required = false }) => (
   <fieldset className="recommend-toggle">
     <legend className="recommend-toggle-legend">

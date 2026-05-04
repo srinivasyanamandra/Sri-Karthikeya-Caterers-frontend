@@ -98,7 +98,8 @@
 
 /* Elegant breathing scale effect */
 @keyframes logoBreathe {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -117,11 +118,11 @@
     width: 120px;
     height: 120px;
   }
-  
+
   .route-loader-brand {
     font-size: 16px;
   }
-  
+
   .route-loader-status {
     font-size: 12px;
   }
@@ -132,11 +133,11 @@
     width: 100px;
     height: 100px;
   }
-  
+
   .route-loader-content {
     gap: 24px;
   }
-  
+
   .route-loader-brand {
     font-size: 14px;
   }
@@ -154,7 +155,7 @@
     transition: none;
     animation: none;
   }
-  
+
   .route-loader-content {
     opacity: 1;
     transform: scale(1);

@@ -16,9 +16,7 @@ export const CONTACT = {
   countryCode: 'IN',
   fullAddress: 'Hyderabad, Telangana 500001',
 
-  phones: [
-    { label: '+91 81258 20110', tel: '+918125820110' },
-  ],
+  phones: [{ label: '+91 81258 20110', tel: '+918125820110' }],
   /* `primaryPhone` is derived below — never edit phone numbers in two places. */
 
   email: 'info@srikarthikeyacaterers.in',

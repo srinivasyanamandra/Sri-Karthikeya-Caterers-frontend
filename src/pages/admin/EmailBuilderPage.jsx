@@ -586,8 +586,10 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
     const email = window.prompt('Send a test of this email to:');
     if (!email) return;
     // TODO: POST to backend with { to: email, subject, html: exportedHtml }
-    // eslint-disable-next-line no-console
-    console.log('Send test', { to: email, subject, html: exportedHtml });
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.info('[email-builder] send test', { to: email, subject, html: exportedHtml });
+    }
     alert(`Test email queued for ${email}.`);
   };
 

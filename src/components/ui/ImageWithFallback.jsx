@@ -12,6 +12,12 @@ import React, { useState } from 'react';
  * to <img>. Two extras:
  *   - fallbackLabel: optional short text shown inside the placeholder.
  *   - className:     forwarded to both states.
+ *
+ * @param {object} props
+ * @param {string} [props.src]
+ * @param {string} props.alt - Required; used as alt text and as aria-label on the fallback.
+ * @param {string} [props.className]
+ * @param {string} [props.fallbackLabel] - Optional caption inside the placeholder.
  */
 const ImageWithFallback = ({
   src,

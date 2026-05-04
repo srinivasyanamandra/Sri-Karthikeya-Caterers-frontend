@@ -86,9 +86,12 @@ const ContactPage = () => {
   /* On unmount, cancel any pending auto-reset. Without this, navigating
      away during the submitted window would call setState on an unmounted
      component and trigger a React dev warning. */
-  useEffect(() => () => {
-    if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
+    },
+    []
+  );
 
   /**
    * Update a single field and clear its inline error if one was showing.
@@ -214,18 +217,23 @@ const ContactPage = () => {
               <span className="eyebrow">Reach us</span>
               <h2 className="section-title">A team that answers.</h2>
               <p className="contact-intro">
-                Call, email, or send us a note through the form — every event is coordinated personally.
+                Call, email, or send us a note through the form — every event is coordinated
+                personally.
               </p>
 
               <div className="contact-info-card">
-                <span className="info-icon"><i className="fas fa-map-marker-alt" aria-hidden="true"></i></span>
+                <span className="info-icon">
+                  <i className="fas fa-map-marker-alt" aria-hidden="true"></i>
+                </span>
                 <div>
                   <h3>Visit us</h3>
                   <p>{CONTACT.fullAddress}</p>
                 </div>
               </div>
               <div className="contact-info-card">
-                <span className="info-icon"><i className="fas fa-phone" aria-hidden="true"></i></span>
+                <span className="info-icon">
+                  <i className="fas fa-phone" aria-hidden="true"></i>
+                </span>
                 <div>
                   <h3>Call us</h3>
                   <p>
@@ -234,18 +242,26 @@ const ContactPage = () => {
                         safe to extend without touching this JSX. */}
                     {CONTACT.phones.map((p, i) => (
                       <React.Fragment key={p.tel}>
-                        {p.label}{i < CONTACT.phones.length - 1 && <br />}
+                        {p.label}
+                        {i < CONTACT.phones.length - 1 && <br />}
                       </React.Fragment>
                     ))}
-                    <br />{CONTACT.hours}
+                    <br />
+                    {CONTACT.hours}
                   </p>
                 </div>
               </div>
               <div className="contact-info-card">
-                <span className="info-icon"><i className="fas fa-envelope" aria-hidden="true"></i></span>
+                <span className="info-icon">
+                  <i className="fas fa-envelope" aria-hidden="true"></i>
+                </span>
                 <div>
                   <h3>Email us</h3>
-                  <p>{CONTACT.email}<br />{CONTACT.responseTime}</p>
+                  <p>
+                    {CONTACT.email}
+                    <br />
+                    {CONTACT.responseTime}
+                  </p>
                 </div>
               </div>
             </aside>
@@ -275,12 +291,22 @@ const ContactPage = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="name">Full name</label>
-                    <input type="text" placeholder="Enter your name" required {...fieldProps('name')} />
+                    <input
+                      type="text"
+                      placeholder="Enter your name"
+                      required
+                      {...fieldProps('name')}
+                    />
                     {fieldError('name')}
                   </div>
                   <div className="form-group">
                     <label htmlFor="email">Email</label>
-                    <input type="email" placeholder="your@email.com" required {...fieldProps('email')} />
+                    <input
+                      type="email"
+                      placeholder="your@email.com"
+                      required
+                      {...fieldProps('email')}
+                    />
                     {fieldError('email')}
                   </div>
                 </div>
@@ -288,7 +314,12 @@ const ContactPage = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="phone">Phone</label>
-                    <input type="tel" placeholder="+91 XXXXX XXXXX" required {...fieldProps('phone')} />
+                    <input
+                      type="tel"
+                      placeholder="+91 XXXXX XXXXX"
+                      required
+                      {...fieldProps('phone')}
+                    />
                     {fieldError('phone')}
                   </div>
                   <div className="form-group">
@@ -304,14 +335,22 @@ const ContactPage = () => {
                     <select required {...fieldProps('eventType')}>
                       <option value="">Select event type</option>
                       {eventTypes.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
                       ))}
                     </select>
                     {fieldError('eventType')}
                   </div>
                   <div className="form-group">
                     <label htmlFor="guests">Guests</label>
-                    <input type="number" min="1" placeholder="e.g. 100" required {...fieldProps('guests')} />
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 100"
+                      required
+                      {...fieldProps('guests')}
+                    />
                     {fieldError('guests')}
                   </div>
                 </div>
@@ -331,9 +370,15 @@ const ContactPage = () => {
                   style={{ width: '100%' }}
                   disabled={submitted}
                 >
-                  {submitted
-                    ? <><i className="fas fa-check" aria-hidden="true"></i> Request received</>
-                    : <>Submit request <i className="fas fa-arrow-right" aria-hidden="true"></i></>}
+                  {submitted ? (
+                    <>
+                      <i className="fas fa-check" aria-hidden="true"></i> Request received
+                    </>
+                  ) : (
+                    <>
+                      Submit request <i className="fas fa-arrow-right" aria-hidden="true"></i>
+                    </>
+                  )}
                 </button>
               </form>
             </div>

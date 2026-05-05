@@ -11,7 +11,7 @@
  *  ✦ Toast notifications
  */
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import AdminPortal from '../../components/admin/shared/AdminPortal';
 import { useToast } from './useToast';
@@ -22,6 +22,23 @@ import {
   usePagination,
   PaginationBar,
 } from './adminHooks';
+import { admin as adminApi } from '../../services/api';
+
+const mapQuote = (q) => ({
+  id: q.id,
+  clientId: q.clientId,
+  clientName: q.clientName || '',
+  email: q.clientEmail || '',
+  phone: q.clientPhone || '',
+  eventType: q.eventType || '',
+  eventDate: q.eventDate || '',
+  guestCount: q.guests ?? 0,
+  status: (q.status || 'pending').toLowerCase(),
+  submittedDate: q.createdAt || '',
+  budget: q.budget || '',
+  venue: q.venue || '',
+  message: q.message || '',
+});
 
 /* ─── Seed data ───────────────────────────────────────────── */
 
@@ -57,7 +74,9 @@ const fmt = (s) =>
 
 export default function QuotesPage() {
   const { toast } = useToast();
-  const [quotes, setQuotes] = useState(SEED_QUOTES);
+  const [quotes, setQuotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortKey, setSortKey] = useState('submittedDate');
@@ -71,6 +90,33 @@ export default function QuotesPage() {
   // Close drawer on ESC
   useEscapeKey(() => setSelectedQuote(null), !!selectedQuote);
   useFocusTrap(drawerRef, !!selectedQuote);
+
+  /* Fetch on mount and whenever the status filter changes (everything else is client-side). */
+  const reload = useCallback(() => {
+    setLoading(true);
+    return adminApi
+      .listQuotes({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        page: 0,
+        size: 200,
+        sortField: 'createdAt',
+        sortDir: 'desc',
+      })
+      .then((data) => {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setQuotes(items.map(mapQuote));
+        setLoadError('');
+      })
+      .catch((err) => {
+        setLoadError(err?.message || 'Could not load quotes.');
+      })
+      .finally(() => setLoading(false));
+  }, [statusFilter]);
+
+  useEffect(() => { reload(); }, [reload]);
+  /* keep reference to use as a SEED list to keep code paths stable in dev */
+  // eslint-disable-next-line no-unused-vars
+  const _seedRef = SEED_QUOTES;
 
   // Filter and sort
   const filtered = useMemo(() => {
@@ -122,13 +168,28 @@ export default function QuotesPage() {
     }
   }, [sortKey]);
 
-  // Update status
-  const handleStatusUpdate = useCallback((id, newStatus) => {
+  // Update status — optimistic, with rollback on failure
+  const handleStatusUpdate = useCallback(async (id, newStatus) => {
+    const prevQuotes = quotes;
     setQuotes((prev) =>
       prev.map((q) => (q.id === id ? { ...q, status: newStatus } : q))
     );
-    toast.success(`Quote status updated to ${STATUS_CONFIG[newStatus].label}`);
-  }, [toast]);
+    try {
+      const updated = await adminApi.updateQuoteStatus(id, newStatus);
+      setQuotes((prev) =>
+        prev.map((q) => (q.id === id ? mapQuote({
+          ...q,
+          status: updated?.status || newStatus,
+          respondedAt: updated?.respondedAt,
+        }) : q))
+      );
+      setSelectedQuote((prev) => (prev && prev.id === id ? { ...prev, status: newStatus } : prev));
+      toast.success(`Quote status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+    } catch (err) {
+      setQuotes(prevQuotes);
+      toast.error(err?.message || 'Could not update status. Please try again.');
+    }
+  }, [quotes, toast]);
 
   // Stats
   const stats = useMemo(() => {
@@ -176,6 +237,25 @@ export default function QuotesPage() {
               );
             })}
           </div>
+
+          {loadError && (
+            <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+              <button
+                type="button"
+                className="btn-link"
+                style={{ marginLeft: 12 }}
+                onClick={reload}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {loading && (
+            <p style={{ color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              <i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> Loading quotes…
+            </p>
+          )}
 
           {/* Toolbar — search + status select */}
           <div className="admin-table-controls">

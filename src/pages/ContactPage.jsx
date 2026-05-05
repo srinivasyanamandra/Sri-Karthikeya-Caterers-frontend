@@ -3,6 +3,7 @@ import PageHero from '../components/layout/PageHero';
 import { CONTACT } from '../constants/contact';
 import eventTypes from '../data/eventTypes';
 import { validateForm } from '../utils/validation';
+import { publicApi } from '../services/api';
 
 /**
  * @typedef  {Object}  QuoteFormState
@@ -74,6 +75,12 @@ const ContactPage = () => {
   /** Finite-state flag: false = idle, true = submitted/awaiting reset. */
   const [submitted, setSubmitted] = useState(false);
 
+  /** True while a submission is in flight. */
+  const [submitting, setSubmitting] = useState(false);
+
+  /** Server-side error to display above the form (network, 5xx, etc.). */
+  const [submitError, setSubmitError] = useState('');
+
   /**
    * Pending auto-reset timer id. Held in a ref so updates don't trigger
    * re-renders, and so cleanup can cancel a timer scheduled in a stale
@@ -126,34 +133,53 @@ const ContactPage = () => {
    * preserved — the user can read the success banner without their input
    * vanishing under them.
    */
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     const validationErrors = validateForm(formData);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-
-      /* Move keyboard / screen-reader focus to the first invalid field.
-         The `aria-invalid="true"` attribute is set declaratively in
-         fieldProps below, so this query is guaranteed to match in the
-         next render — but we read from the live DOM, not React state. */
       const firstInvalid = document.querySelector('[aria-invalid="true"]');
       if (firstInvalid instanceof HTMLElement) firstInvalid.focus();
       return;
     }
 
     setErrors({});
-    setSubmitted(true);
+    setSubmitError('');
+    setSubmitting(true);
 
-    /* Cancel any in-flight reset before scheduling a new one. Without this,
-       rapid re-submits would stack timers and cause the success banner to
-       flicker as overlapping timeouts each tried to flip state. */
-    if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = window.setTimeout(() => {
-      setSubmitted(false);
-      setFormData(INITIAL_FORM_STATE);
-      resetTimerRef.current = null;
-    }, SUBMITTED_RESET_MS);
+    try {
+      await publicApi.submitQuote({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        eventType: formData.eventType,
+        eventDate: formData.eventDate,
+        guests: parseInt(formData.guests, 10) || 0,
+        venue: '',
+        budget: '',
+        message: formData.message,
+      });
+
+      setSubmitted(true);
+
+      if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = window.setTimeout(() => {
+        setSubmitted(false);
+        setFormData(INITIAL_FORM_STATE);
+        resetTimerRef.current = null;
+      }, SUBMITTED_RESET_MS);
+    } catch (error) {
+      // server-side field validation is mapped back into the inline error UI
+      if (error?.fields && typeof error.fields === 'object') {
+        setErrors(error.fields);
+      }
+      setSubmitError(
+        error?.message || 'We could not submit your request. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   /**
@@ -284,6 +310,14 @@ const ContactPage = () => {
                 </div>
               )}
 
+              {/* Server-side error (network, 5xx, etc.) lives above the form. */}
+              {submitError && !submitted && (
+                <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+                  <i className="fas fa-exclamation-circle" aria-hidden="true"></i>
+                  <span>{submitError}</span>
+                </div>
+              )}
+
               {/* `noValidate` disables the browser's native validation UI.
                   validateForm() owns validation; the inline error spans
                   + aria-invalid wiring own the visual feedback. */}
@@ -368,11 +402,15 @@ const ContactPage = () => {
                   type="submit"
                   className="btn btn-accent btn-lg"
                   style={{ width: '100%' }}
-                  disabled={submitted}
+                  disabled={submitted || submitting}
                 >
                   {submitted ? (
                     <>
                       <i className="fas fa-check" aria-hidden="true"></i> Request received
+                    </>
+                  ) : submitting ? (
+                    <>
+                      <i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Sending…
                     </>
                   ) : (
                     <>

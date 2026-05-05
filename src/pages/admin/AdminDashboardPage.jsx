@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigation } from '../../contexts/NavigationContext';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import { useAnimatedCounter } from './adminHooks';
+import { admin as adminApi } from '../../services/api';
 
 /* ─── Constants ───────────────────────────────────────────── */
 
@@ -112,22 +113,83 @@ function DynamicGreeting() {
   return <span>{greeting}</span>;
 }
 
+/** Map a system_logs type → admin page id for activity-row click-through. */
+const pageForType = (t) => {
+  switch (t) {
+    case 'review': return 'admin-reviews';
+    case 'quote': return 'admin-quotes';
+    case 'email':
+    case 'campaign': return 'admin-subscribers';
+    case 'client': return 'admin-clients';
+    case 'auth': return 'admin-dashboard';
+    default: return 'admin-dashboard';
+  }
+};
+
 /* ─── Main Page ───────────────────────────────────────────── */
 
 const AdminDashboardPage = () => {
   const { navigate } = useNavigation();
 
-  const stats = useMemo(
-    () => ({
-      totalClients: 247,
-      pendingQuotes: 12,
-      pendingReviews: 8,
-      activeSubscribers: 1834,
-    }),
-    []
-  );
-
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    pendingQuotes: 0,
+    pendingReviews: 0,
+    activeSubscribers: 0,
+  });
+  const [trends, setTrends] = useState({
+    newClientsThisMonth: 0,
+    newQuotesThisMonth: 0,
+    campaignsSentThisMonth: 0,
+    emailsDeliveredThisMonth: 0,
+  });
   const [activity, setActivity] = useState(INITIAL_ACTIVITY);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    adminApi
+      .dashboard()
+      .then((data) => {
+        if (cancelled) return;
+        const t = data?.totals || {};
+        setStats({
+          totalClients: t.clients ?? 0,
+          pendingQuotes: t.quotesPending ?? 0,
+          pendingReviews: t.reviewsPending ?? 0,
+          activeSubscribers: t.subscribersActive ?? 0,
+        });
+        setTrends(data?.trends || {});
+
+        const apiActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
+        if (apiActivity.length > 0) {
+          setActivity(
+            apiActivity.map((row, i) => ({
+              id: row.id || `act-${i}`,
+              type: row.type || 'info',
+              message: row.message || `${row.type} · ${row.action}`,
+              time: row.at ? new Date(row.at).toLocaleString('en-IN') : '',
+              status: row.status || 'info',
+              page: pageForType(row.type),
+              read: false,
+            }))
+          );
+        }
+        setLoadError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(err?.message || 'Could not load dashboard data.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const unreadCount = useMemo(
     () => activity.filter((a) => !a.read).length,
@@ -189,33 +251,35 @@ const AdminDashboardPage = () => {
       {
         value: stats.totalClients,
         label: 'Total Clients',
-        change: '+12 this month',
-        positive: true,
+        change: trends.newClientsThisMonth ? `+${trends.newClientsThisMonth} this month` : '—',
+        positive: (trends.newClientsThisMonth || 0) > 0,
         delay: 50,
       },
       {
         value: stats.pendingQuotes,
         label: 'Pending Quotes',
-        change: 'Requires attention',
+        change: stats.pendingQuotes > 0 ? 'Requires attention' : 'All caught up',
         positive: false,
         delay: 120,
       },
       {
         value: stats.pendingReviews,
         label: 'Pending Reviews',
-        change: 'Awaiting moderation',
+        change: stats.pendingReviews > 0 ? 'Awaiting moderation' : 'All caught up',
         positive: false,
         delay: 190,
       },
       {
         value: stats.activeSubscribers,
         label: 'Active Subscribers',
-        change: '+48 this week',
+        change: trends.emailsDeliveredThisMonth
+          ? `${trends.emailsDeliveredThisMonth} emails sent (mtd)`
+          : '—',
         positive: true,
         delay: 260,
       },
     ],
-    [stats]
+    [stats, trends]
   );
 
   return (
@@ -231,6 +295,16 @@ const AdminDashboardPage = () => {
       {/* ── Stats ── */}
       <section className="section">
         <div className="container">
+          {loadError && (
+            <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+            </div>
+          )}
+          {loading && !loadError && (
+            <p style={{ color: 'var(--color-text-muted)', marginBottom: 16 }}>
+              <i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> Loading live stats…
+            </p>
+          )}
           <div className="admin-stats-grid">
             {kpiCards.map((card) => (
               <AnimatedStatCard key={card.label} {...card} />

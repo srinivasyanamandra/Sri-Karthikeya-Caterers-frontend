@@ -1,17 +1,62 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PageHero from '../components/layout/PageHero';
-import reviews from '../data/reviews';
 import reviewFilters from '../data/reviewFilters';
+import { publicApi } from '../services/api';
 
+/**
+ * Public reviews page — fetches APPROVED + isPublic reviews from the
+ * backend (`GET /api/reviews/public`). Stays paginated client-side over
+ * the first page (24 rows) — good enough for a marketing page.
+ */
 const ReviewsPage = () => {
   const [activeFilter, setActiveFilter] = useState('all');
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    publicApi
+      .listPublicReviews({ page: 0, limit: 48 })
+      .then((data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setReviews(
+          items.map((r) => ({
+            id: r.id,
+            name: r.reviewerName || 'Verified guest',
+            event: r.eventType || 'Event',
+            date: r.eventDate || r.submittedAt || '',
+            guests: r.guests || '—',
+            review: r.comments || '',
+            rating: r.overallRating || 5,
+            highlights: [],
+            isFeatured: !!r.isFeatured,
+          }))
+        );
+        setError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err?.message || 'Could not load reviews.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredReviews = useMemo(
     () =>
       activeFilter === 'all'
         ? reviews
-        : reviews.filter((review) => review.event.toLowerCase().includes(activeFilter)),
-    [activeFilter]
+        : reviews.filter((r) =>
+            (r.event || '').toLowerCase().includes(activeFilter)
+          ),
+    [activeFilter, reviews]
   );
 
   return (
@@ -37,39 +82,58 @@ const ReviewsPage = () => {
             ))}
           </div>
 
+          {loading && (
+            <p style={{ textAlign: 'center', padding: '2rem 0' }}>
+              <i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i>{' '}
+              Loading reviews…
+            </p>
+          )}
+
+          {!loading && error && (
+            <p className="form-error" role="alert" style={{ textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+
+          {!loading && !error && filteredReviews.length === 0 && (
+            <p style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
+              No reviews yet — be among the first to share your experience.
+            </p>
+          )}
+
           <div className="reviews-grid">
             {filteredReviews.map((review) => (
-              <article key={review.event + review.date} className="review-card">
+              <article key={review.id || review.event + review.date} className="review-card">
                 <div className="review-header">
-                  {/* <ImageWithFallback
-                    src={review.image}
-                    alt={review.name}
-                    className="reviewer-image"
-                    loading="lazy"
-                  /> */}
                   <div className="reviewer-info">
-                    {/* <h3>{review.name}</h3> */}
+                    <h3>{review.name}</h3>
                     <div className="review-meta">
                       <span>{review.date}</span>
-                      <span className="dot-sep" />
-                      <span>{review.guests} Guests</span>
+                      {review.guests && review.guests !== '—' && (
+                        <>
+                          <span className="dot-sep" />
+                          <span>{review.guests} Guests</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <span className="event-badge">{review.event}</span>
                 </div>
-                {/* <div className="review-rating" aria-label={`${review.rating} out of 5`}>
-                  {Array.from({ length: review.rating }, (_, i) => (
+                <div className="review-rating" aria-label={`${review.rating} out of 5`}>
+                  {Array.from({ length: review.rating || 5 }, (_, i) => (
                     <span key={i}>★</span>
                   ))}
-                </div> */}
-                <p className="review-text">"{review.review}"</p>
-                <div className="review-highlights">
-                  {review.highlights.map((h) => (
-                    <span key={h} className="highlight-tag">
-                      {h}
-                    </span>
-                  ))}
                 </div>
+                <p className="review-text">"{review.review}"</p>
+                {review.highlights?.length > 0 && (
+                  <div className="review-highlights">
+                    {review.highlights.map((h) => (
+                      <span key={h} className="highlight-tag">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </article>
             ))}
           </div>

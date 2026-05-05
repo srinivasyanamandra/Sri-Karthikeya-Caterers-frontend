@@ -144,8 +144,9 @@ function App() {
      missing or doesn't resolve to a known route. */
   const [currentPage, setCurrentPage] = useState(() => {
     if (typeof window === 'undefined') return ROUTES.HOME;
-    const hash = window.location.hash.slice(1);
-    if (hash && PAGE_REGISTRY[hash]) return hash;
+    const hash = window.location.hash.slice(1); // e.g. "feedback?t=abc" or "home"
+    const pageId = hash.split('?')[0];           // strip query string before lookup
+    if (pageId && PAGE_REGISTRY[pageId]) return pageId;
     return ROUTES.HOME;
   });
 
@@ -191,23 +192,33 @@ function App() {
      smooth scroll across an entire page-height feels slow on long content. */
   useEffect(() => { window.scrollTo(0, 0); }, [currentPage]);
 
-  /* Keep the URL hash in sync with the current page so links like
-     `https://…/#admin-login` are shareable and refreshable. */
+  /* Keep the URL hash page-id in sync with the current page.
+     Crucially: preserve any existing query string (e.g. ?t=<token>)
+     so invitation links like /#feedback?t=abc survive navigation. */
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const expected = `#${currentPage}`;
-    if (window.location.hash !== expected) {
-      window.history.replaceState(null, '', expected);
+    const currentHash = window.location.hash.slice(1); // e.g. "feedback?t=abc"
+    const currentPageId = currentHash.split('?')[0];
+    const currentQuery = currentHash.includes('?') ? currentHash.slice(currentHash.indexOf('?')) : '';
+
+    if (currentPageId !== currentPage) {
+      // Only update the page-id segment; keep the query string if we're
+      // staying on the same page, drop it when navigating away.
+      const newHash = currentPageId === currentPage
+        ? `#${currentPage}${currentQuery}`
+        : `#${currentPage}`;
+      window.history.replaceState(null, '', newHash);
     }
   }, [currentPage]);
 
   /* Listen for browser-driven hash changes (back / forward / pasted URL). */
   useEffect(() => {
     const onHashChange = () => {
-      const hash = window.location.hash.slice(1);
-      if (hash && PAGE_REGISTRY[hash] && hash !== currentPage) {
-        setCurrentPage(hash);
-      } else if (!hash && currentPage !== ROUTES.HOME) {
+      const hash = window.location.hash.slice(1); // e.g. "feedback?t=abc"
+      const pageId = hash.split('?')[0];           // strip query string
+      if (pageId && PAGE_REGISTRY[pageId] && pageId !== currentPage) {
+        setCurrentPage(pageId);
+      } else if (!pageId && currentPage !== ROUTES.HOME) {
         setCurrentPage(ROUTES.HOME);
       }
     };

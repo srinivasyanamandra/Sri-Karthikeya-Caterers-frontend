@@ -33,6 +33,20 @@ import {
   usePagination,
   PaginationBar,
 } from './adminHooks';
+import { admin as adminApi } from '../../services/api';
+
+/** Map server client → UI shape used by this page. */
+const mapServerClient = (c) => ({
+  id: c.id,
+  name: c.name,
+  email: c.email,
+  phone: c.phone,
+  status: (c.status || 'lead').toLowerCase(),
+  totalEvents: (c.quoteCount || 0) + (c.reviewCount || 0),
+  lastEvent: '',
+  reviewStatus: c.reviewCount > 0 ? 'submitted' : 'pending',
+  joinedDate: c.createdAt,
+});
 
 /* ─── Seed data ───────────────────────────────────────────── */
 
@@ -51,8 +65,11 @@ const SEED_CLIENTS = [
 
 /* ─── Reducer ─────────────────────────────────────────────── */
 
+
 function clientsReducer(state, action) {
   switch (action.type) {
+    case 'REPLACE':
+      return Array.isArray(action.items) ? action.items : [];
     case 'ADD':
       return [action.client, ...state];
     case 'UPDATE':
@@ -409,8 +426,9 @@ function ClientDrawer({ client, onClose, onSendInvitation }) {
 
 const ClientsPage = () => {
   const { toast } = useToast();
-  const [clients, dispatch] = useReducer(clientsReducer, SEED_CLIENTS);
+  const [clients, dispatch] = useReducer(clientsReducer, []);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchRaw, setSearchRaw] = useState('');
   const search = useDebounce(searchRaw, 280);
   const [sort, setSort] = useState({ col: 'joinedDate', dir: 'desc' });
@@ -419,10 +437,20 @@ const ClientsPage = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const lastCheckedRef = useRef(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 350);
-    return () => clearTimeout(t);
+  const reload = useCallback(() => {
+    setLoading(true);
+    return adminApi
+      .listClients({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' })
+      .then((data) => {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        dispatch({ type: 'REPLACE', items: items.map(mapServerClient) });
+        setLoadError('');
+      })
+      .catch((err) => setLoadError(err?.message || 'Could not load clients.'))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
 
   /* ── Filter + sort ── */
 
@@ -559,6 +587,15 @@ const ClientsPage = () => {
 
       <section className="section">
         <div className="container">
+
+          {loadError && (
+            <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+              <button type="button" className="btn-link" style={{ marginLeft: 12 }} onClick={reload}>
+                Retry
+              </button>
+            </div>
+          )}
 
           {/* Toolbar — search only; primary actions live in the hero */}
           <div className="admin-toolbar">

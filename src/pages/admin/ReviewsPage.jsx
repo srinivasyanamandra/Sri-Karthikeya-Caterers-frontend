@@ -32,6 +32,25 @@ import {
   usePagination,
   PaginationBar,
 } from './adminHooks';
+import { admin as adminApi } from '../../services/api';
+
+/** Map a server review row into the UI's review shape. */
+const mapServerReview = (r) => {
+  const status = (r.status || 'pending').toLowerCase();
+  const uiStatus = r.isFeatured ? 'featured' : status; // pending | approved | featured | rejected
+  return {
+    id: r.id,
+    clientName: r.reviewerName || r.clientName || 'Anonymous',
+    eventType: r.eventType || '',
+    eventDate: r.eventDate || '',
+    rating: r.overallRating || 0,
+    comment: r.comments || '',
+    submittedAt: r.submittedAt || r.createdAt,
+    status: uiStatus,
+    approvedAt: r.moderatedAt,
+    featuredAt: r.isFeatured ? r.moderatedAt : null,
+  };
+};
 
 /* ─── Initial Data ────────────────────────────────────────── */
 
@@ -109,6 +128,8 @@ function reviewsReducer(state, action) {
   const now = new Date().toISOString();
 
   switch (action.type) {
+    case 'REPLACE':
+      return Array.isArray(action.items) ? action.items : [];
     case 'APPROVE':
       return state.map((r) =>
         r.id === action.id ? { ...r, status: 'approved', approvedAt: now } : r
@@ -375,18 +396,31 @@ function ReviewModal({ review, activeTab, onClose, onApprove, onReject, onFeatur
 
 const ReviewsPage = () => {
   const { toast } = useToast();
-  const [reviews, dispatch] = useReducer(reviewsReducer, SEED_REVIEWS);
+  const [reviews, dispatch] = useReducer(reviewsReducer, []);
   const [activeTab, setActiveTab] = useState('pending');
   const [selectedReview, setSelectedReview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastCheckedRef = useRef(null);
 
-  // Simulate initial load
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 350);
-    return () => clearTimeout(t);
+  // Initial load + reload helper
+  const reload = useCallback(() => {
+    setLoading(true);
+    return adminApi
+      .listReviews({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' })
+      .then((data) => {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        dispatch({ type: 'REPLACE', items: items.map(mapServerReview) });
+        setLoadError('');
+      })
+      .catch((err) => setLoadError(err?.message || 'Could not load reviews.'))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   // Clear selection when tab changes
   useEffect(() => {
@@ -409,16 +443,16 @@ const ReviewsPage = () => {
 
   /* ── Action helpers ── */
 
+  /** Optimistically apply `action`, call `apiCall`, rollback on failure. */
   const withOptimism = useCallback(
-    async (snapshot, action, successMsg, errorMsg) => {
+    async (snapshot, action, apiCall, successMsg, errorMsg) => {
       dispatch(action);
       try {
-        // Simulate async API call
-        await new Promise((r) => setTimeout(r, 600));
+        await apiCall();
         toast.success(successMsg);
-      } catch {
-        dispatch({ type: 'ROLLBACK', snapshot });
-        toast.error(errorMsg);
+      } catch (err) {
+        dispatch({ type: 'REPLACE', items: snapshot });
+        toast.error(err?.message || errorMsg);
       }
     },
     [toast]
@@ -431,10 +465,10 @@ const ReviewsPage = () => {
       await withOptimism(
         snap,
         { type: 'APPROVE', id: review.id },
-        `"${review.clientName}'s" review approved and visible to the team.`,
+        () => adminApi.approveReview(review.id),
+        `"${review.clientName}'s" review approved.`,
         'Could not approve review — please try again.'
       );
-      // Switch to approved tab to show the result
       if (activeTab === 'pending') setActiveTab('approved');
     },
     [reviews, activeTab, withOptimism]
@@ -447,6 +481,7 @@ const ReviewsPage = () => {
       await withOptimism(
         snap,
         { type: 'REJECT', id: review.id },
+        () => adminApi.rejectReview(review.id),
         `Review by ${review.clientName} rejected.`,
         'Could not reject review — please try again.'
       );
@@ -461,7 +496,8 @@ const ReviewsPage = () => {
       await withOptimism(
         snap,
         { type: 'FEATURE', id: review.id },
-        `🌟 ${review.clientName}'s review is now featured on the homepage!`,
+        () => adminApi.featureReview(review.id, true),
+        `🌟 ${review.clientName}'s review is now featured!`,
         'Could not feature review — please try again.'
       );
       setActiveTab('featured');
@@ -476,12 +512,31 @@ const ReviewsPage = () => {
       await withOptimism(
         snap,
         { type: 'UNFEATURE', id: review.id },
+        () => adminApi.featureReview(review.id, false),
         `Review moved back to approved.`,
         'Could not unfeature review.'
       );
       setActiveTab('approved');
     },
     [reviews, withOptimism]
+  );
+
+  // unused but exposed for future delete-from-detail UI
+  // eslint-disable-next-line no-unused-vars
+  const handleDelete = useCallback(
+    async (review) => {
+      const snap = reviews;
+      setSelectedReview(null);
+      try {
+        await adminApi.deleteReview(review.id);
+        await reload();
+        toast.success('Review deleted.');
+      } catch (err) {
+        dispatch({ type: 'REPLACE', items: snap });
+        toast.error(err?.message || 'Could not delete review.');
+      }
+    },
+    [reviews, reload, toast]
   );
 
   /* ── Keyboard shortcuts (when modal is open) ── */
@@ -536,6 +591,7 @@ const ReviewsPage = () => {
     await withOptimism(
       snap,
       { type: 'BULK_APPROVE', ids },
+      () => Promise.all(ids.map((id) => adminApi.approveReview(id))),
       `${ids.length} review${ids.length > 1 ? 's' : ''} approved.`,
       'Bulk approve failed — please try again.'
     );
@@ -549,6 +605,7 @@ const ReviewsPage = () => {
     await withOptimism(
       snap,
       { type: 'BULK_REJECT', ids },
+      () => Promise.all(ids.map((id) => adminApi.rejectReview(id))),
       `${ids.length} review${ids.length > 1 ? 's' : ''} rejected.`,
       'Bulk reject failed — please try again.'
     );
@@ -577,6 +634,15 @@ const ReviewsPage = () => {
 
       <section className="section">
         <div className="container">
+
+          {loadError && (
+            <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+              <button type="button" className="btn-link" style={{ marginLeft: 12 }} onClick={reload}>
+                Retry
+              </button>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="admin-tabs" role="tablist" aria-label="Review status">

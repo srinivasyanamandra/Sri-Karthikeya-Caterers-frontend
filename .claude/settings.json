@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat)",
+      "Bash(bash /tmp/check_endpoints.sh)",
+      "Bash(./mvnw -q -DskipTests compile)",
+      "Bash(./mvnw -DskipTests compile)",
+      "Bash(./mvnw -DskipTests test-compile)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/admin/auth/login -X POST -H 'Content-Type: application/json' -d '{}' --max-time 5)",
+      "Bash(/bin/bash -c 'TOKEN=\"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzcmluaXZhcy55YW5hbWFuZHJhMDRAZ21haWwuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzc3ODk3NDg1LCJleHAiOjE3Nzc5ODM4ODV9.FxfNvgGWNNBFCo21choNNJNIOD-iHTOl3uamUhPly5w\"; export TOKEN; export BASE=\"http://localhost:8080\"; /usr/bin/curl -s -o /tmp/r1.json -w \"POST /api/quotes -> %{http_code}\\\\n\" -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"name\\\\\":\\\\\"Test User\\\\\",\\\\\"email\\\\\":\\\\\"qa.test@example.com\\\\\",\\\\\"phone\\\\\":\\\\\"+919999999999\\\\\",\\\\\"eventType\\\\\":\\\\\"Wedding\\\\\",\\\\\"eventDate\\\\\":\\\\\"2026-09-01\\\\\",\\\\\"guests\\\\\":150,\\\\\"venue\\\\\":\\\\\"Test Hall\\\\\",\\\\\"budget\\\\\":\\\\\"100000\\\\\",\\\\\"message\\\\\":\\\\\"automated test\\\\\"}\" \"$BASE/api/quotes\" --max-time 30; cat /tmp/r1.json | /usr/bin/head -c 400; echo')"
+    ]
+  }
+}

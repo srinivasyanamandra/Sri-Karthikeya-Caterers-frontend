@@ -4,11 +4,13 @@ import { FOOTER_EXPLORE } from '../../constants/navigation';
 import { buildWhatsAppLink } from '../../constants/whatsapp';
 import { useNavigate } from '../../contexts/NavigationContext';
 import { validateEmail } from '../../utils/validation';
+import { publicApi } from '../../services/api';
 
 const Footer = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState('idle'); // 'idle' | 'invalid' | 'subscribed'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'invalid' | 'submitting' | 'subscribed' | 'duplicate' | 'error'
+  const [errorMessage, setErrorMessage] = useState('');
   const resetTimerRef = useRef(null);
   const year = new Date().getFullYear();
 
@@ -17,24 +19,42 @@ const Footer = () => {
     if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
   }, []);
 
-  const handleSubscribe = (event) => {
+  const handleSubscribe = async (event) => {
     event.preventDefault();
     if (!validateEmail(email)) {
       setStatus('invalid');
       return;
     }
-    setStatus('subscribed');
-    setEmail('');
+    setStatus('submitting');
+    setErrorMessage('');
+    try {
+      await publicApi.subscribe({ email, name: '' });
+      setStatus('subscribed');
+      setEmail('');
+    } catch (err) {
+      // 409 from the backend means the email is already actively subscribed
+      if (err?.status === 409 || err?.code === 'CONFLICT') {
+        setStatus('duplicate');
+        setErrorMessage('This email is already subscribed.');
+      } else {
+        setStatus('error');
+        setErrorMessage(err?.message || 'Could not subscribe. Please try again.');
+      }
+    }
     if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
     resetTimerRef.current = window.setTimeout(() => {
       setStatus('idle');
+      setErrorMessage('');
       resetTimerRef.current = null;
-    }, 3500);
+    }, 4500);
   };
 
   const handleEmailChange = (event) => {
     setEmail(event.target.value);
-    if (status === 'invalid') setStatus('idle');
+    if (status !== 'idle' && status !== 'submitting') {
+      setStatus('idle');
+      setErrorMessage('');
+    }
   };
 
   return (
@@ -129,10 +149,12 @@ const Footer = () => {
             <button
               type="submit"
               aria-label="Subscribe to newsletter"
-              disabled={status === 'subscribed'}
+              disabled={status === 'subscribed' || status === 'submitting'}
             >
               {status === 'subscribed' ? (
                 <><i className="fas fa-check" aria-hidden="true"></i> Subscribed</>
+              ) : status === 'submitting' ? (
+                <><i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Subscribing</>
               ) : (
                 <>Subscribe <i className="fas fa-arrow-right" aria-hidden="true"></i></>
               )}
@@ -142,6 +164,9 @@ const Footer = () => {
             <span id="newsletter-error" className="form-error" role="alert">
               Please enter a valid email address.
             </span>
+          )}
+          {(status === 'duplicate' || status === 'error') && errorMessage && (
+            <span className="form-error" role="alert">{errorMessage}</span>
           )}
         </div>
       </div>

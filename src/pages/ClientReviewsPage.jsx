@@ -6,6 +6,22 @@ import RecommendToggle from '../components/feedback/RecommendToggle';
 import eventTypes from '../data/eventTypes';
 import { validateClientReview } from '../utils/validation';
 import { CONTACT } from '../constants/contact';
+import { publicApi } from '../services/api';
+
+/**
+ * Read the `?t=<token>` query string from the URL hash.
+ * The app uses hash-based routing so the query lives inside the hash:
+ *   /#feedback?t=abc123
+ * Called lazily so it always reads the current hash at mount time.
+ */
+const readTokenFromHash = () => {
+  if (typeof window === 'undefined') return '';
+  const hash = window.location.hash || '';
+  const q = hash.indexOf('?');
+  if (q < 0) return '';
+  const params = new URLSearchParams(hash.slice(q + 1));
+  return params.get('t') || params.get('token') || '';
+};
 
 const INITIAL_STATE = {
   // Section 1: Basic Information
@@ -32,8 +48,6 @@ const INITIAL_STATE = {
   // photo: null, // Commented out - photo upload disabled
   recommend: '',
 };
-
-const SUBMIT_DELAY_MS = 1000;
 
 /**
  * Success message copy based on overall rating.
@@ -82,6 +96,15 @@ const ClientReviewsPage = () => {
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle'); // 'idle' | 'submitting' | 'submitted'
+  const [submitError, setSubmitError] = useState('');
+
+  /* Token-driven invitation state.
+   * Read from the live hash after mount so App.js hash-sync has already run.
+   * Using useRef for the token itself (it never changes after mount). */
+  const [token, setToken] = useState('');
+  const [invitation, setInvitation] = useState(null);
+  const [invitationStatus, setInvitationStatus] = useState('loading');
+  // 'loading' | 'valid' | 'invalid' | 'no-token'
 
   const submitTimerRef = useRef(null);
 
@@ -92,6 +115,38 @@ const ClientReviewsPage = () => {
     },
     []
   );
+
+  /* Read the token from the hash after mount (hash-sync in App.js may not
+   * have run yet during the initial render, so we defer to useEffect). */
+  useEffect(() => {
+    const t = readTokenFromHash();
+    setToken(t);
+    setInvitationStatus(t ? 'loading' : 'no-token');
+  }, []);
+
+  /* Validate the invitation token once the token is known. */
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    publicApi
+      .getReviewInvitation(token)
+      .then((data) => {
+        if (cancelled) return;
+        setInvitation(data);
+        setInvitationStatus('valid');
+        setFormData((prev) => ({
+          ...prev,
+          name: data?.client?.name || prev.name,
+          eventType: data?.eventType || prev.eventType,
+          eventDate: data?.eventDate || prev.eventDate,
+        }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInvitationStatus('invalid');
+      });
+    return () => { cancelled = true; };
+  }, [token]);
 
   const updateField = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -106,29 +161,57 @@ const ClientReviewsPage = () => {
 
   const handleTextChange = (event) => updateField(event.target.name, event.target.value);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (status === 'submitting') return;
+
+    if (!token || invitationStatus !== 'valid') {
+      setSubmitError(
+        'A valid invitation link is required to submit a review. Please use the link sent to your email.'
+      );
+      return;
+    }
 
     const validationErrors = validateClientReview(formData);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      // Focus first invalid field for accessibility
       const firstInvalid = document.querySelector('[aria-invalid="true"]');
       if (firstInvalid instanceof HTMLElement) firstInvalid.focus();
       return;
     }
 
     setErrors({});
+    setSubmitError('');
     setStatus('submitting');
 
-    // Simulate API call (replace with actual backend integration)
-    if (submitTimerRef.current) window.clearTimeout(submitTimerRef.current);
-    submitTimerRef.current = window.setTimeout(() => {
+    try {
+      await publicApi.submitReview(token, {
+        reviewerName: formData.name,
+        overallRating: formData.overallRating,
+        foodQualityRating: formData.foodQualityRating,
+        tasteRating: formData.tasteRating,
+        presentationRating: formData.presentationRating,
+        staffBehaviorRating: formData.staffBehaviorRating,
+        timelinessRating: formData.timelinessRating,
+        serviceQualityRating: formData.serviceQualityRating,
+        comments: formData.comments,
+        suggestions: formData.suggestions,
+        recommend: formData.recommend,
+      });
       setStatus('submitted');
-      submitTimerRef.current = null;
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, SUBMIT_DELAY_MS);
+    } catch (err) {
+      if (err?.fields) setErrors(err.fields);
+      if (err?.status === 410) {
+        setSubmitError(
+          'This review link has already been used or has expired. Please contact us if you need a new invitation.'
+        );
+        setInvitationStatus('invalid');
+      } else {
+        setSubmitError(err?.message || 'Could not submit your review. Please try again.');
+      }
+      setStatus('idle');
+    }
   };
 
   const submitAnother = () => {
@@ -158,6 +241,82 @@ const ClientReviewsPage = () => {
     () => successCopy(formData.overallRating),
     [formData.overallRating]
   );
+
+  // ── Token-loading / token-invalid states ──────────────────────────────
+  if (invitationStatus === 'loading') {
+    return (
+      <div className="client-reviews-page">
+        <PageHero
+          eyebrow="Verifying invitation"
+          title="One moment…"
+          intro="Checking your review link."
+        />
+        <section className="section section-alt">
+          <div className="container" style={{ textAlign: 'center', padding: '3rem 0' }}>
+            <i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (invitationStatus === 'invalid') {
+    return (
+      <div className="client-reviews-page">
+        <PageHero
+          eyebrow="Link not available"
+          title="This review link is no longer valid."
+          intro="Review links are single-use and expire 14 days after they're sent."
+        />
+        <section className="section section-alt">
+          <div className="container">
+            <div className="feedback-thanks">
+              <div className="feedback-thanks-mark" aria-hidden="true">⚠</div>
+              <h2 className="feedback-thanks-title">We couldn't open this invitation.</h2>
+              <p className="feedback-thanks-body">
+                Either the link has already been used or it's expired. We'd still love to hear
+                from you — please email us and we'll send a fresh invitation.
+              </p>
+              <p className="feedback-thanks-meta">
+                Reach us at{' '}
+                <a href={`tel:${CONTACT.primaryPhone.tel}`}>{CONTACT.primaryPhone.label}</a> or{' '}
+                <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a>.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (invitationStatus === 'no-token') {
+    return (
+      <div className="client-reviews-page">
+        <PageHero
+          eyebrow="Invitation required"
+          title="This page needs a private link."
+          intro="If you've recently catered with us, check your inbox for a personal review invitation."
+        />
+        <section className="section section-alt">
+          <div className="container">
+            <div className="feedback-thanks">
+              <div className="feedback-thanks-mark" aria-hidden="true">◆</div>
+              <h2 className="feedback-thanks-title">Looking for your review link?</h2>
+              <p className="feedback-thanks-body">
+                We email a single-use review link a few days after each event. If you haven't
+                received yours, please reach out and we'll resend it right away.
+              </p>
+              <p className="feedback-thanks-meta">
+                Email{' '}
+                <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a> or call{' '}
+                <a href={`tel:${CONTACT.primaryPhone.tel}`}>{CONTACT.primaryPhone.label}</a>.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   // ── Submitted state ───────────────────────────────────────────────────
   if (status === 'submitted') {
@@ -217,6 +376,12 @@ const ClientReviewsPage = () => {
               celebration.
             </p>
           </div>
+
+          {submitError && (
+            <div className="form-error" role="alert" style={{ marginBottom: '1rem' }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {submitError}
+            </div>
+          )}
 
           {/* Main review form */}
           <form className="client-reviews-form" onSubmit={handleSubmit} noValidate>

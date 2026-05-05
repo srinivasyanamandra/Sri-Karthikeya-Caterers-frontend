@@ -1,17 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { CONTACT } from '../../constants/contact';
+import { auth as authApi, tokenStore } from '../../services/api';
 
 /**
- * AdminLoginPage — JWT-based authentication matching the existing website's design
- * 
- * Authentication Flow:
- * 1. User enters email + password
- * 2. Backend validates and sends JWT via email
- * 3. User enters JWT token from email
- * 4. Backend verifies JWT and grants access
- * 
- * Design: Matches ContactPage form styling exactly
+ * AdminLoginPage — JWT-based authentication.
+ * Calls POST /api/admin/auth/login (email + password) and stores the JWT
+ * locally. On success, redirects to the dashboard.
  */
 
 const INITIAL_STATE = {
@@ -24,14 +19,14 @@ const AdminLoginPage = () => {
   const { navigate } = useNavigation();
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
-  const [step, setStep] = useState('credentials'); // 'credentials' | 'token' | 'success'
+  const [step, setStep] = useState('credentials'); // 'credentials' | 'success'
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
   const tokenInputRef = useRef(null);
 
-  // Focus token input when step changes to 'token'
   useEffect(() => {
+    // unused now that token step is collapsed, but keep ref for parity
     if (step === 'token' && tokenInputRef.current) {
       tokenInputRef.current.focus();
     }
@@ -80,7 +75,7 @@ const AdminLoginPage = () => {
 
   const handleCredentialsSubmit = async (e) => {
     e.preventDefault();
-    
+
     const validationErrors = validateCredentials();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -94,76 +89,29 @@ const AdminLoginPage = () => {
     setMessage('');
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/admin/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     email: formData.email,
-      //     password: formData.password
-      //   })
-      // });
-      // const data = await response.json();
+      const data = await authApi.login({
+        email: formData.email,
+        password: formData.password,
+      });
+      tokenStore.set(data.token, data.expiresAt, data?.user?.email || formData.email);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setStep('token');
-      setMessage('JWT token sent to your email. Please check your inbox and enter the token below.');
-    } catch (error) {
-      setErrors({ email: 'Invalid credentials. Please try again.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTokenSubmit = async (e) => {
-    e.preventDefault();
-    
-    const validationErrors = validateToken();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
-    setLoading(true);
-    setErrors({});
-    setMessage('');
-
-    try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/admin/auth/verify', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ token: formData.token })
-      // });
-      // const data = await response.json();
-      // localStorage.setItem('jwtToken', data.token);
-      // localStorage.setItem('adminEmail', data.email);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Set authentication tokens for development
-      const mockToken = 'dev-token-' + Date.now();
-      const expiry = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-      localStorage.setItem('adminToken', mockToken);
-      localStorage.setItem('adminTokenExpiry', expiry.toString());
-      localStorage.setItem('adminEmail', formData.email);
-      
       setStep('success');
-      setMessage('Login successful! Redirecting to dashboard...');
-      
-      // Redirect to dashboard after 1 second
-      setTimeout(() => {
-        navigate('admin-dashboard');
-      }, 1000);
+      setMessage('Login successful. Redirecting to dashboard…');
+      setTimeout(() => navigate('admin-dashboard'), 600);
     } catch (error) {
-      setErrors({ token: 'Invalid or expired token. Please try again.' });
+      const code = error?.code || '';
+      const msg =
+        code === 'INVALID_CREDENTIALS' || error?.status === 401
+          ? 'Email or password is incorrect.'
+          : error?.message || 'Login failed. Please try again.';
+      setErrors({ password: msg });
     } finally {
       setLoading(false);
     }
   };
+
+  // Kept as a no-op so any stale refs don't crash. The token-step UI is hidden.
+  const handleTokenSubmit = (e) => e.preventDefault();
 
   const handleBackToCredentials = () => {
     setStep('credentials');

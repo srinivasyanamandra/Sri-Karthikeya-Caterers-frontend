@@ -1,6 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import { CONTACT } from '../../constants/contact';
+import { admin as adminApi, tokenStore } from '../../services/api';
+import { useToast } from './useToast';
+
+/** UI ↔ backend template-type mapping. */
+const UI_TO_API_TYPE = {
+  review_invitation: 'REVIEW_INVITATION',
+  campaign: 'CAMPAIGN',
+  newsletter: 'CAMPAIGN',
+  quote_followup: 'QUOTE_CONFIRMATION',
+  quote_confirmation: 'QUOTE_CONFIRMATION',
+  thank_you: 'CUSTOM',
+  custom: 'CUSTOM',
+};
+const API_TO_UI_TYPE = {
+  review_invitation: 'review_invitation',
+  campaign: 'newsletter',
+  quote_confirmation: 'quote_followup',
+  custom: 'custom',
+};
+
+const mapServerTemplate = (t) => ({
+  id: t.id,
+  name: t.name || '',
+  type: API_TO_UI_TYPE[(t.type || 'custom').toLowerCase()] || 'custom',
+  subject: t.subject || '',
+  preheader: t.preheader || '',
+  blocks: Array.isArray(t.content?.blocks) ? t.content.blocks : [],
+  description: t.content?.description || '',
+  isActive: t.isActive !== false,
+  lastModified: (t.updatedAt || t.createdAt || '').slice(0, 10),
+  usageCount: 0,
+  _content: t.content || {},
+});
 
 /* ----------------------------------------------------------
    Email Builder
@@ -179,8 +212,8 @@ const uid = () => `b${Date.now()}_${Math.floor(Math.random() * 9999)}`;
 const renderInline = (text) => (text || '').replace(/\n/g, '<br>');
 
 const SAMPLE_VARS = {
-  '{{client_name}}': 'Rajesh Kumar',
-  '{{first_name}}': 'Rajesh',
+  '{{client_name}}': '[Client Name]',
+  '{{first_name}}': '[First Name]',
   '{{event_type}}': 'Wedding',
   '{{event_date}}': '15 April 2026',
   '{{guest_count}}': '500',
@@ -371,9 +404,13 @@ const EditorBlock = ({ block, onChange, onRemove, onMove, onSelect, isSelected }
    The page itself.
    ---------------------------------------------------------- */
 const EmailBuilderPage = () => {
+  const { toast } = useToast();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   // Editor state
   const [name, setName] = useState('');
@@ -384,13 +421,24 @@ const EmailBuilderPage = () => {
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [device, setDevice] = useState('desktop');
 
-  useEffect(() => {
+  const reload = () => {
     setLoading(true);
-    const t = setTimeout(() => {
-      setTemplates(DEFAULT_TEMPLATES);
-      setLoading(false);
-    }, 350);
-    return () => clearTimeout(t);
+    return adminApi
+      .listTemplates({ page: 0, size: 100, sortField: 'updatedAt', sortDir: 'desc' })
+      .then((data) => {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setTemplates(items.map(mapServerTemplate));
+        setLoadError('');
+      })
+      .catch((err) => setLoadError(err?.message || 'Could not load templates.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    reload();
+    // suppress unused-warning for the seed array kept for design reference
+    // eslint-disable-next-line no-unused-vars
+    const _seed = DEFAULT_TEMPLATES;
   }, []);
 
   const isEditing = editingId !== null;
@@ -473,46 +521,110 @@ const EmailBuilderPage = () => {
     updateBlock(block.id, { text: (block.text || '') + ' ' + variable });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim() || !subject.trim()) {
-      alert('Please give your template a name and a subject before saving.');
+      toast.warning('Please give your template a name and a subject before saving.');
       return;
     }
-    const payload = {
-      id: editingId === 'new' ? Date.now() : editingId,
-      name,
-      type,
-      subject,
-      preheader,
-      blocks,
-      lastModified: new Date().toISOString().slice(0, 10),
-      usageCount: 0,
-      description:
+    setSaving(true);
+    try {
+      // exportedHtml is defined further down via useMemo on the same `blocks` state.
+      // We call it indirectly by re-reading from the closure — see exportedHtml below.
+      const description =
         TEMPLATE_SEEDS[type]?.description ||
-        'Custom email template for ad-hoc campaigns.',
-    };
-    setTemplates((prev) => {
-      const existing = prev.find((t) => t.id === payload.id);
-      if (existing) return prev.map((t) => (t.id === payload.id ? payload : t));
-      return [payload, ...prev];
-    });
-    exitEditor();
+        'Custom email template for ad-hoc campaigns.';
+      const apiType = UI_TO_API_TYPE[type] || 'CUSTOM';
+
+      const payload = {
+        name: name.trim(),
+        type: apiType,
+        subject,
+        preheader,
+        content: {
+          html: exportedHtml,
+          text: blocks
+            .map((b) => (b.text ? String(b.text) : ''))
+            .filter(Boolean)
+            .join('\n\n'),
+          blocks,
+          description,
+        },
+        isActive: true,
+      };
+
+      let saved;
+      if (editingId === 'new') {
+        saved = await adminApi.createTemplate(payload);
+        toast.success('Template created.');
+      } else {
+        saved = await adminApi.updateTemplate(editingId, payload);
+        toast.success('Template updated.');
+      }
+      const mapped = mapServerTemplate(saved);
+      setTemplates((prev) => {
+        const idx = prev.findIndex((t) => t.id === mapped.id);
+        if (idx === -1) return [mapped, ...prev];
+        const next = [...prev];
+        next[idx] = mapped;
+        return next;
+      });
+      exitEditor();
+    } catch (err) {
+      toast.error(err?.message || 'Could not save template.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDuplicate = (tpl) => {
-    const copy = {
-      ...tpl,
-      id: Date.now(),
-      name: `${tpl.name} (copy)`,
-      lastModified: new Date().toISOString().slice(0, 10),
-      usageCount: 0,
-    };
-    setTemplates((prev) => [copy, ...prev]);
+  const handleDuplicate = async (tpl) => {
+    setSaving(true);
+    try {
+      const apiType = UI_TO_API_TYPE[tpl.type] || 'CUSTOM';
+      const created = await adminApi.createTemplate({
+        name: `${tpl.name} (copy)`,
+        type: apiType,
+        subject: tpl.subject,
+        preheader: tpl.preheader,
+        content: tpl._content || { blocks: tpl.blocks || [] },
+        isActive: true,
+      });
+      setTemplates((prev) => [mapServerTemplate(created), ...prev]);
+      toast.success('Template duplicated.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not duplicate template.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this template? This cannot be undone.')) {
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this template? This cannot be undone.')) return;
+    try {
+      await adminApi.deleteTemplate(id);
       setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast.success('Template deleted.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete template.');
+    }
+  };
+
+  const handleTestSend = async (id) => {
+    const adminEmail = tokenStore.email() || '';
+    const to = window.prompt('Send test email to:', adminEmail);
+    if (!to) return;
+    setTesting(true);
+    try {
+      // Pass null for name so backend derives it from the email address
+      const result = await adminApi.testTemplate(id, { to, name: null });
+      if (result?.ok) {
+        toast.success(`Test email sent to ${to}.`);
+      } else {
+        toast.error(result?.error || 'Test send failed.');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Test send failed.');
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -582,15 +694,28 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
 </body></html>`;
   }, [blocks, subject, preheader]);
 
-  const handleSendTest = () => {
-    const email = window.prompt('Send a test of this email to:');
-    if (!email) return;
-    // TODO: POST to backend with { to: email, subject, html: exportedHtml }
-    if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.info('[email-builder] send test', { to: email, subject, html: exportedHtml });
+  const handleSendTest = async () => {
+    if (editingId === 'new' || !editingId) {
+      toast.warning('Save the template first, then send a test.');
+      return;
     }
-    alert(`Test email queued for ${email}.`);
+    const adminEmail = tokenStore.email() || '';
+    const email = window.prompt('Send a test of this email to:', adminEmail);
+    if (!email) return;
+    setTesting(true);
+    try {
+      // Pass null for name so backend derives it from the email address
+      const result = await adminApi.testTemplate(editingId, { to: email, name: null });
+      if (result?.ok) {
+        toast.success(`Test email sent to ${email}.`);
+      } else {
+        toast.error(result?.error || 'Test send failed.');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Test send failed.');
+    } finally {
+      setTesting(false);
+    }
   };
 
   /* ─────────────── List view ─────────────── */
@@ -612,6 +737,14 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
 
         <section className="section">
           <div className="container">
+            {loadError && (
+              <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+                <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+                <button type="button" className="btn-link" style={{ marginLeft: 12 }} onClick={reload}>
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="admin-toolbar">
               <div className="admin-toolbar-left">
                 <span className="admin-subhead" style={{ marginBottom: 0 }}>
@@ -678,8 +811,18 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
                       <button
                         type="button"
                         className="btn btn-ghost"
+                        onClick={() => handleTestSend(tpl.id)}
+                        title="Send test"
+                        disabled={testing}
+                      >
+                        <i className="fas fa-paper-plane" aria-hidden="true"></i>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
                         onClick={() => handleDuplicate(tpl)}
                         title="Duplicate"
+                        disabled={saving}
                       >
                         <i className="fas fa-copy" aria-hidden="true"></i>
                       </button>
@@ -728,14 +871,13 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
               </button>
             </div>
             <div className="admin-toolbar-right">
-              <button type="button" className="btn btn-ghost" onClick={handleSendTest}>
-                <i className="fas fa-paper-plane" aria-hidden="true"></i> Send test
+              <button type="button" className="btn btn-ghost" onClick={handleSendTest} disabled={testing || saving}>
+                <i className="fas fa-paper-plane" aria-hidden="true"></i>
+                {testing ? ' Sending…' : ' Send test'}
               </button>
-              <button type="button" className="btn btn-secondary">
-                <i className="fas fa-save" aria-hidden="true"></i> Save as draft
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleSave}>
-                <i className="fas fa-check" aria-hidden="true"></i> Save template
+              <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <i className="fas fa-check" aria-hidden="true"></i>
+                {saving ? ' Saving…' : ' Save template'}
               </button>
             </div>
           </div>

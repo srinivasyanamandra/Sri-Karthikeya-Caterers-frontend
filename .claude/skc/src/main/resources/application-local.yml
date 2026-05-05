@@ -1,0 +1,43 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sri_karthikeya_caterers
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_USERNAME:info@srikarthikeyacaterers.in}
+    password: ${SMTP_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+server:
+  port: 8080
+
+cors:
+  allowed-origins:
+    - http://localhost:3000
+    - http://localhost:5173
+
+logging:
+  level:
+    syncqubits.ai.skc: DEBUG
+    org.springframework.security: DEBUG

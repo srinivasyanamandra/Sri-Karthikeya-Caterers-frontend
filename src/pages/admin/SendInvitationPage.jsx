@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
-
-const MOCK_CLIENTS = [
-  { id: 1, name: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '+91 98765 43210' },
-  { id: 2, name: 'Priya Sharma', email: 'priya@example.com', phone: '+91 98765 43211' },
-  { id: 3, name: 'Anand Reddy', email: 'anand@example.com', phone: '+91 98765 43212' },
-];
+import { admin as adminApi } from '../../services/api';
 
 const INITIAL = {
   clientId: '',
@@ -23,11 +18,26 @@ const SendInvitationPage = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [inviteResult, setInviteResult] = useState(null);
   const [clients, setClients] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
 
   useEffect(() => {
-    setClients(MOCK_CLIENTS);
+    let cancelled = false;
+    adminApi
+      .listClients({ page: 0, size: 100, sortField: 'createdAt', sortDir: 'desc' })
+      .then((data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setClients(items.map((c) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+        })));
+      })
+      .catch(() => { /* silent: directory is optional */ });
+    return () => { cancelled = true; };
   }, []);
 
   const handleChange = (e) => {
@@ -56,7 +66,8 @@ const SendInvitationPage = () => {
     if (!formData.clientPhone.trim()) e.clientPhone = 'Phone number is required';
     if (!formData.eventType.trim()) e.eventType = 'Event type is required';
     if (!formData.eventDate) e.eventDate = 'Event date is required';
-    if (formData.expiryDays < 1 || formData.expiryDays > 90)
+    const days = parseInt(formData.expiryDays, 10);
+    if (isNaN(days) || days < 1 || days > 90)
       e.expiryDays = 'Expiry must be between 1 and 90 days';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -67,14 +78,37 @@ const SendInvitationPage = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 1200));
+      const payload = formData.clientId
+        ? {
+            clientId: formData.clientId,
+            eventType: formData.eventType,
+            eventDate: formData.eventDate,
+            expiresInDays: parseInt(formData.expiryDays, 10) || 14,
+          }
+        : {
+            name: formData.clientName,
+            email: formData.clientEmail,
+            phone: formData.clientPhone,
+            eventType: formData.eventType,
+            eventDate: formData.eventDate,
+            expiresInDays: parseInt(formData.expiryDays, 10) || 14,
+          };
+      const result = await adminApi.inviteReview(payload);
+      setInviteResult(result);
       setSuccess(true);
-      setTimeout(() => {
-        setFormData(INITIAL);
-        setSuccess(false);
-      }, 2400);
-    } catch {
-      setErrors({ submit: 'Failed to send invitation. Please try again.' });
+      if (result?.emailQueued) {
+        setTimeout(() => {
+          setFormData(INITIAL);
+          setSuccess(false);
+          setInviteResult(null);
+        }, 4000);
+      }
+    } catch (err) {
+      if (err?.fields) setErrors((prev) => ({ ...prev, ...err.fields }));
+      setErrors((prev) => ({
+        ...prev,
+        submit: err?.message || 'Failed to send invitation. Please try again.',
+      }));
     } finally {
       setLoading(false);
     }
@@ -111,10 +145,49 @@ const SendInvitationPage = () => {
           {success ? (
             <div className="admin-success-state">
               <div className="admin-success-icon">
-                <i className="fas fa-check-circle" aria-hidden="true"></i>
+                <i
+                  className={`fas ${inviteResult?.emailDelivered === false ? 'fa-exclamation-triangle' : 'fa-check-circle'}`}
+                  aria-hidden="true"
+                  style={{ color: inviteResult?.emailDelivered === false ? '#b45309' : undefined }}
+                ></i>
               </div>
-              <h3>Invitation sent!</h3>
-              <p>The review link is on its way to {formData.clientName}.</p>
+              <h3>
+                {inviteResult?.emailQueued
+                  ? 'Invitation sent!'
+                  : 'Invitation created'}
+              </h3>
+              <p>
+                {inviteResult?.emailQueued ? (
+                  <>
+                    The review link is on its way to <strong>{formData.clientName}</strong>.
+                    {inviteResult?.messageId && (
+                      <>
+                        <br />
+                        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          Message ID: {inviteResult.messageId}
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    The review link was created for <strong>{formData.clientName}</strong>.
+                    <br />
+                    <span style={{ fontSize: 13 }}>
+                      Share this link manually:{' '}
+                      <a href={inviteResult?.reviewLink} target="_blank" rel="noopener noreferrer">
+                        {inviteResult?.reviewLink}
+                      </a>
+                    </span>
+                  </>
+                )}
+              </p>
+              <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--color-bg-secondary)', borderRadius: 6, fontSize: 13 }}>
+                <strong>Review link:</strong>{' '}
+                <a href={inviteResult?.reviewLink} target="_blank" rel="noopener noreferrer">
+                  {inviteResult?.reviewLink}
+                </a>
+              </div>
             </div>
           ) : (
             <div className="admin-surface">

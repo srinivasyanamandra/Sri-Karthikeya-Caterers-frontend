@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import AdminPortal from '../../components/admin/shared/AdminPortal';
 import { CONTACT } from '../../constants/contact';
+import { admin as adminApi } from '../../services/api';
+import { useToast } from './useToast';
 
 /* ================================================================
    Mock data
@@ -51,19 +53,52 @@ const firstName = (full) => (full || '').trim().split(/\s+/)[0] || '';
    ================================================================ */
 
 const RecipientPicker = ({ selected, onToggle, onAddBulk }) => {
-  const [tab, setTab]   = useState('subscriber');
+  const [tab, setTab]     = useState('subscriber');
   const [query, setQuery] = useState('');
+  const [pool, setPool]   = useState([]);
+  const [counts, setCounts] = useState({ clients: 0, subscribers: 0 });
+  const [loading, setLoading] = useState(false);
 
-  const pool = tab === 'subscriber' ? MOCK_SUBSCRIBERS : MOCK_CLIENTS;
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return pool;
-    return pool.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q)
-    );
-  }, [pool, query]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    adminApi
+      .searchRecipients({
+        kind: tab === 'subscriber' ? 'subscribers' : 'clients',
+        q: query.trim() || undefined,
+        page: 0,
+        size: 200,
+        sortField: 'createdAt',
+        sortDir: 'desc',
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setPool(items.map((r) => ({
+          kind: r.kind,
+          id: r.id,
+          name: r.name || r.email,
+          email: r.email,
+          phone: r.phone,
+          status: (r.tags || [])[0] || (r.kind === 'subscriber' ? 'website' : 'lead'),
+          source: (r.tags || [])[0] || 'website',
+          lastEvent: r.lastEventDate || '',
+          subscribedAt: r.createdAt,
+        })));
+        setCounts({
+          clients: data?.kindCounts?.clients ?? 0,
+          subscribers: data?.kindCounts?.subscribers ?? 0,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPool([]);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, query]);
+
+  const filtered = pool;
 
   const selectedKey = (p) => `${p.kind}:${p.id}`;
   const isSelected = (p) => selected.has(selectedKey(p));
@@ -81,7 +116,7 @@ const RecipientPicker = ({ selected, onToggle, onAddBulk }) => {
             onClick={() => setTab('subscriber')}
           >
             <i className="fas fa-user-friends" aria-hidden="true" /> Subscribers
-            <span className="cw-tab-count">{MOCK_SUBSCRIBERS.length}</span>
+            <span className="cw-tab-count">{counts.subscribers}</span>
           </button>
           <button
             type="button"
@@ -91,7 +126,7 @@ const RecipientPicker = ({ selected, onToggle, onAddBulk }) => {
             onClick={() => setTab('client')}
           >
             <i className="fas fa-users" aria-hidden="true" /> Clients
-            <span className="cw-tab-count">{MOCK_CLIENTS.length}</span>
+            <span className="cw-tab-count">{counts.clients}</span>
           </button>
         </div>
         <label className="admin-search">
@@ -124,7 +159,12 @@ const RecipientPicker = ({ selected, onToggle, onAddBulk }) => {
       </div>
 
       <ul className="cw-picker-list" role="listbox" aria-label="Recipients">
-        {filtered.length === 0 && (
+        {loading && (
+          <li className="cw-picker-empty">
+            <i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> Loading…
+          </li>
+        )}
+        {!loading && filtered.length === 0 && (
           <li className="cw-picker-empty">No matches.</li>
         )}
         {filtered.map((p) => {
@@ -239,6 +279,7 @@ const SelectedPanel = ({ selected, onRemove, onClear }) => {
    ================================================================ */
 
 const TemplateAssigner = ({
+  templates,
   recipients,
   defaultTemplateId, setDefaultTemplateId,
   byKind,            setByKind,
@@ -284,7 +325,7 @@ const TemplateAssigner = ({
             value={defaultTemplateId}
             onChange={(e) => setDefaultTemplateId(e.target.value)}
           >
-            {MOCK_TEMPLATES.map((t) => (
+            {templates.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
@@ -301,7 +342,7 @@ const TemplateAssigner = ({
                 value={byKind.subscriber || defaultTemplateId}
                 onChange={(e) => setByKind({ ...byKind, subscriber: e.target.value })}
               >
-                {MOCK_TEMPLATES.map((t) => (
+                {templates.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
@@ -312,7 +353,7 @@ const TemplateAssigner = ({
                 value={byKind.client || defaultTemplateId}
                 onChange={(e) => setByKind({ ...byKind, client: e.target.value })}
               >
-                {MOCK_TEMPLATES.map((t) => (
+                {templates.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
@@ -347,7 +388,7 @@ const TemplateAssigner = ({
                       aria-label={`Template for ${p.name}`}
                     >
                       <option value="">(use default)</option>
-                      {MOCK_TEMPLATES.map((t) => (
+                      {templates.map((t) => (
                         <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
                     </select>
@@ -373,22 +414,57 @@ const resolveTemplate = ({ recipient, mode, defaultTemplateId, byKind, perRecipi
   return defaultTemplateId;
 };
 
-const renderTemplate = (templateId, recipient) => {
-  const t = MOCK_TEMPLATES.find((x) => x.id === templateId) || MOCK_TEMPLATES[0];
+const renderTemplate = (templates, templateId, recipient) => {
+  const t = (templates || []).find((x) => x.id === templateId) || (templates || [])[0] || { subject: '', body: '', content: {} };
+  
+  // Extract template content - prefer content.blocks for structured templates, fallback to content.text or body
+  let bodyText = '';
+  if (t.content?.blocks && Array.isArray(t.content.blocks)) {
+    // Structured template with blocks - extract text from each block
+    bodyText = t.content.blocks
+      .map(block => {
+        if (block.type === 'heading' || block.type === 'subheading') {
+          return block.text || '';
+        }
+        if (block.type === 'paragraph' || block.type === 'quote') {
+          return (block.text || '');
+        }
+        if (block.type === 'button') {
+          return `[${block.text || 'Button'}]`;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n\n');
+  } else if (t.content?.text) {
+    bodyText = t.content.text;
+  } else if (t.body) {
+    bodyText = t.body;
+  } else {
+    // Fallback to a generic message if no content found
+    bodyText = `Hello {{firstName}},\n\nWe wanted to share a quick update from our kitchen — new seasonal specials are now on the menu, and our wedding calendar for the next two months is filling fast.\n\nWith warmth,\nThe {{brand}} family`;
+  }
+  
   const variables = {
-    brand:     CONTACT.brand,
-    firstName: firstName(recipient.name),
-    fullName:  recipient.name,
-    email:     recipient.email,
-    eventType: recipient.kind === 'client' ? 'event' : 'season',
+    brand:        CONTACT.brand,
+    firstName:    firstName(recipient.name),
+    fullName:     recipient.name,
+    clientName:   recipient.name,
+    name:         recipient.name,
+    email:        recipient.email,
+    eventType:    recipient.kind === 'client' ? 'event' : 'season',
+    eventDate:    new Date().toLocaleDateString('en-IN'),
+    guestCount:   '100',
+    reviewLink:   'https://srikarthikeyacaterers.in/review/preview',
+    quoteLink:    'https://srikarthikeyacaterers.in/quote/preview',
   };
+  
   const apply = (str) => str.replace(/\{\{(\w+)\}\}/g, (_, k) => variables[k] ?? `{{${k}}}`);
+  
   return {
     template: t,
-    subject:  apply(t.subject),
-    body: apply(
-      `Hello {{firstName}},\n\nWe wanted to share a quick update from our kitchen — new seasonal specials are now on the menu, and our wedding calendar for the next two months is filling fast.\n\nWith warmth,\nThe {{brand}} family`
-    ),
+    subject:  apply(t.subject || 'Subject preview'),
+    body:     apply(bodyText),
   };
 };
 
@@ -441,9 +517,33 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
     return m;
   });
 
+  /* Templates loaded from backend */
+  const [templates, setTemplates] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    adminApi
+      .listTemplates({ page: 0, size: 100, sortField: 'updatedAt', sortDir: 'desc' })
+      .then((data) => {
+        if (cancelled) return;
+        const items = (Array.isArray(data?.items) ? data.items : []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          subject: t.subject,
+          body: t.content?.text || '',
+        }));
+        setTemplates(items);
+        // Auto-select first template so the step is immediately valid
+        if (items.length > 0) {
+          setDefaultTemplateId((prev) => (prev && prev !== '' ? prev : items[0].id));
+        }
+      })
+      .catch(() => { /* surface inline if needed */ });
+    return () => { cancelled = true; };
+  }, []);
+
   /* Template assignment */
   const [mode,              setMode]              = useState('all'); // 'all' | 'byKind' | 'perRow'
-  const [defaultTemplateId, setDefaultTemplateId] = useState(MOCK_TEMPLATES[0].id);
+  const [defaultTemplateId, setDefaultTemplateId] = useState('');
   const [byKind,            setByKind]            = useState({});
   const [perRecipient,      setPerRecipient]      = useState({});
 
@@ -456,6 +556,7 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const step = STEPS[stepIndex].id;
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [done,    setDone]    = useState(false);
 
   /* Preview state */
@@ -513,30 +614,53 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
 
   const handleSend = async () => {
     setSending(true);
-    /* Backend payload — exactly the contract from BACKEND_SYSTEM_DESIGN.md */
-    const payload = {
-      name: `Campaign · ${new Date().toLocaleString('en-IN')}`,
-      defaultTemplateId,
-      byKindTemplate: mode === 'byKind' ? byKind : undefined,
-      perRecipient: mode === 'perRow'
-        ? Object.entries(perRecipient)
-            .filter(([, v]) => Boolean(v))
-            .map(([k, v]) => {
-              const [kind, id] = k.split(':');
-              return { kind, id, templateId: v };
-            })
-        : undefined,
-      recipients: recipients.map((r) => ({ kind: r.kind, id: r.id, email: r.email })),
-      scheduleAt: scheduleMode === 'scheduled' ? `${sendDate}T${sendTime}:00` : null,
-    };
-    if (process.env.NODE_ENV !== 'production') {
-      /* eslint-disable-next-line no-console */
-      console.info('[campaign] payload', payload);
+    setSendError('');
+    try {
+      // 1) Create draft
+      const draft = await adminApi.createCampaign({
+        name: `Campaign · ${new Date().toLocaleString('en-IN')}`,
+        defaultTemplateId,
+        globalVariables: {},
+      });
+      const campaignId = draft.id;
+
+      // 2) Set recipients (explicit include list, replace mode)
+      await adminApi.setCampaignRecipients(campaignId, {
+        mode: 'replace',
+        include: recipients.map((r) => ({ kind: r.kind, id: r.id })),
+      });
+
+      // 3) Assign templates
+      if (!defaultTemplateId) {
+        throw new Error('No template selected. Please go back and pick a template.');
+      }
+      const tplBody = { defaultTemplateId };
+      if (mode === 'byKind') {
+        tplBody.byKindTemplate = byKind;
+      }
+      if (mode === 'perRow') {
+        tplBody.perRecipient = Object.entries(perRecipient)
+          .filter(([, v]) => Boolean(v))
+          .map(([k, v]) => {
+            const colonIdx = k.indexOf(':');
+            const kind = k.substring(0, colonIdx);
+            const id = k.substring(colonIdx + 1);
+            return { kind, id, templateId: v };
+          });
+      }
+      await adminApi.setCampaignTemplates(campaignId, tplBody);
+
+      // 4) Send (immediate or scheduled)
+      const scheduleAt = scheduleMode === 'scheduled' ? `${sendDate}T${sendTime}:00` : null;
+      await adminApi.sendCampaign(campaignId, { scheduleAt });
+
+      setSending(false);
+      setDone(true);
+      setTimeout(() => onClose(true), 1800);
+    } catch (err) {
+      setSending(false);
+      setSendError(err?.message || 'Could not send the campaign.');
     }
-    await new Promise((r) => setTimeout(r, 1400));
-    setSending(false);
-    setDone(true);
-    setTimeout(() => onClose(true), 1800);
   };
 
   if (done) {
@@ -618,6 +742,7 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
             </div>
             <TemplateAssigner
               recipients={recipients}
+              templates={templates}
               defaultTemplateId={defaultTemplateId} setDefaultTemplateId={setDefaultTemplateId}
               byKind={byKind}                       setByKind={setByKind}
               perRecipient={perRecipient}           setPerRecipient={setPerRecipient}
@@ -646,7 +771,7 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
                   const key = `${r.kind}:${r.id}`;
                   const isActive = previewKey ? key === previewKey : r === recipients[0];
                   const tplId = resolveTemplate({ recipient: r, mode, defaultTemplateId, byKind, perRecipient });
-                  const tpl = MOCK_TEMPLATES.find((t) => t.id === tplId);
+                  const tpl = templates.find((t) => t.id === tplId);
                   return (
                     <li key={key}>
                       <button
@@ -671,7 +796,7 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
             <div className="cw-preview-canvas">
               {(() => {
                 const tplId = resolveTemplate({ recipient: previewRecipient, mode, defaultTemplateId, byKind, perRecipient });
-                const { subject, body, template } = renderTemplate(tplId, previewRecipient);
+                const { subject, body, template } = renderTemplate(templates, tplId, previewRecipient);
                 return (
                   <>
                     <div className="cw-preview-meta">
@@ -749,13 +874,13 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
                 <div className="row">
                   <dt>Templates</dt>
                   <dd>
-                    {mode === 'all'    && `Same template for everyone — ${MOCK_TEMPLATES.find((t) => t.id === defaultTemplateId)?.name}`}
+                    {mode === 'all'    && `Same template for everyone — ${templates.find((t) => t.id === defaultTemplateId)?.name}`}
                     {mode === 'byKind' && (
                       <>
                         Per audience —{' '}
-                        <span>{MOCK_TEMPLATES.find((t) => t.id === (byKind.subscriber || defaultTemplateId))?.name}</span>{' '}
+                        <span>{templates.find((t) => t.id === (byKind.subscriber || defaultTemplateId))?.name}</span>{' '}
                         for subscribers ·{' '}
-                        <span>{MOCK_TEMPLATES.find((t) => t.id === (byKind.client || defaultTemplateId))?.name}</span>{' '}
+                        <span>{templates.find((t) => t.id === (byKind.client || defaultTemplateId))?.name}</span>{' '}
                         for clients
                       </>
                     )}
@@ -780,6 +905,11 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
         <div className="summary">
           <strong>{uniqueEmails.toLocaleString('en-IN')}</strong> recipient
           {uniqueEmails === 1 ? '' : 's'} · {STEPS[stepIndex].label} ({stepIndex + 1}/{STEPS.length})
+          {sendError && (
+            <div className="form-error" role="alert" style={{ marginTop: 8 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {sendError}
+            </div>
+          )}
         </div>
         <div className="flex-row">
           <button
@@ -833,22 +963,41 @@ const SOURCE_BADGE = {
 const SubscribersPage = () => {
   const [subscribers, setSubscribers] = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [loadError,   setLoadError]   = useState('');
   const [selected,    setSelected]    = useState([]); // ids of subscribers (for quick-launch wizard)
   const [showWizard,  setShowWizard]  = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const { toast } = useToast();
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     setLoading(true);
-    const t = setTimeout(() => {
-      setSubscribers(MOCK_SUBSCRIBERS);
-      setLoading(false);
-    }, 350);
-    return () => clearTimeout(t);
+    return adminApi
+      .listSubscribers({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' })
+      .then((data) => {
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setSubscribers(
+          items.map((s) => ({
+            id: s.id,
+            email: s.email,
+            name: s.name || '',
+            source: (s.source || 'website').toLowerCase(),
+            subscribedAt: s.createdAt,
+            campaignsSent: 0,
+            status: s.isActive ? 'active' : 'inactive',
+            isActive: s.isActive,
+          }))
+        );
+        setLoadError('');
+      })
+      .catch((err) => setLoadError(err?.message || 'Could not load subscribers.'))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const filtered = subscribers.filter((s) => {
     const q = searchQuery.toLowerCase();
-    return s.email.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+    return s.email.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q);
   });
 
   const handleSelectAll = (e) => {
@@ -862,9 +1011,30 @@ const SubscribersPage = () => {
     if (sent) setSelected([]);
   };
 
+  const handleUnsubscribe = useCallback(async (id) => {
+    try {
+      await adminApi.unsubscribe(id);
+      toast.success('Subscriber unsubscribed.');
+      reload();
+    } catch (err) {
+      toast.error(err?.message || 'Could not unsubscribe.');
+    }
+  }, [reload, toast]);
+
+  const handleDelete = useCallback(async (id, email) => {
+    if (!window.confirm(`Permanently delete subscriber ${email}?`)) return;
+    try {
+      await adminApi.deleteSubscriber(id);
+      toast.success('Subscriber deleted.');
+      reload();
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete subscriber.');
+    }
+  }, [reload, toast]);
+
   const initialSelected = useMemo(
-    () => MOCK_SUBSCRIBERS.filter((s) => selected.includes(s.id)),
-    [selected]
+    () => subscribers.filter((s) => selected.includes(s.id)),
+    [subscribers, selected]
   );
 
   const stats = useMemo(
@@ -917,6 +1087,15 @@ const SubscribersPage = () => {
               <span className="admin-kpi-icon"><i className="fas fa-envelope-open" /></span>
             </div>
           </div>
+
+          {loadError && (
+            <div className="form-error" role="alert" style={{ marginBottom: 16 }}>
+              <i className="fas fa-exclamation-circle" aria-hidden="true" /> {loadError}
+              <button type="button" className="btn-link" style={{ marginLeft: 12 }} onClick={reload}>
+                Retry
+              </button>
+            </div>
+          )}
 
           <div className="admin-toolbar">
             <div className="admin-toolbar-left">
@@ -971,8 +1150,8 @@ const SubscribersPage = () => {
                     <th>Subscriber</th>
                     <th>Source</th>
                     <th>Subscribed</th>
-                    <th>Campaigns</th>
                     <th>Status</th>
+                    <th style={{ width: 160 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -985,17 +1164,41 @@ const SubscribersPage = () => {
                             type="checkbox"
                             checked={selected.includes(s.id)}
                             onChange={() => toggleSubscriber(s.id)}
-                            aria-label={`Select ${s.name}`}
+                            aria-label={`Select ${s.name || s.email}`}
                           />
                         </td>
                         <td>
-                          <div className="admin-cell-title">{s.name}</div>
+                          <div className="admin-cell-title">{s.name || s.email}</div>
                           <div className="admin-cell-sub">{s.email}</div>
                         </td>
                         <td><span className={`status-badge ${badge.className}`}>{badge.label}</span></td>
                         <td className="admin-cell-sub">{fmtDate(s.subscribedAt)}</td>
-                        <td><span className="admin-cell-strong">{s.campaignsSent}</span></td>
-                        <td><span className="status-badge approved"><i className="fas fa-check" /> {s.status}</span></td>
+                        <td>
+                          {s.isActive ? (
+                            <span className="status-badge approved"><i className="fas fa-check" /> active</span>
+                          ) : (
+                            <span className="status-badge declined"><i className="fas fa-ban" /> unsubscribed</span>
+                          )}
+                        </td>
+                        <td>
+                          {s.isActive && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => handleUnsubscribe(s.id)}
+                            >
+                              Unsubscribe
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--color-error)' }}
+                            onClick={() => handleDelete(s.id, s.email)}
+                          >
+                            <i className="fas fa-trash" aria-hidden="true" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

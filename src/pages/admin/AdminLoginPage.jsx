@@ -63,16 +63,6 @@ const AdminLoginPage = () => {
     return newErrors;
   };
 
-  const validateToken = () => {
-    const newErrors = {};
-    
-    if (!formData.token.trim()) {
-      newErrors.token = 'JWT token is required';
-    }
-    
-    return newErrors;
-  };
-
   const handleCredentialsSubmit = async (e) => {
     e.preventDefault();
 

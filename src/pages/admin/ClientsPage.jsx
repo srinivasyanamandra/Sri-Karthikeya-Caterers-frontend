@@ -51,17 +51,6 @@ const mapServerClient = (c) => ({
 /* ─── Seed data ───────────────────────────────────────────── */
 
 let _nextId = 10;
-const SEED_CLIENTS = [
-  { id: 1, name: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '+91 98765 43210', totalEvents: 3, lastEvent: '2026-04-15', reviewStatus: 'submitted', joinedDate: '2025-01-10' },
-  { id: 2, name: 'Priya Sharma', email: 'priya@example.com', phone: '+91 98765 43211', totalEvents: 1, lastEvent: '2026-04-10', reviewStatus: 'pending', joinedDate: '2026-03-15' },
-  { id: 3, name: 'Anand Reddy', email: 'anand@example.com', phone: '+91 98765 43212', totalEvents: 2, lastEvent: '2026-03-25', reviewStatus: 'submitted', joinedDate: '2025-11-20' },
-  { id: 4, name: 'Lakshmi Iyer', email: 'lakshmi@example.com', phone: '+91 98765 43213', totalEvents: 4, lastEvent: '2026-03-10', reviewStatus: 'submitted', joinedDate: '2024-08-05' },
-  { id: 5, name: 'Suresh Menon', email: 'suresh@example.com', phone: '+91 98765 43214', totalEvents: 1, lastEvent: '2026-02-14', reviewStatus: 'pending', joinedDate: '2026-01-20' },
-  { id: 6, name: 'Kavitha Nair', email: 'kavitha@example.com', phone: '+91 98765 43215', totalEvents: 2, lastEvent: '2026-01-30', reviewStatus: 'submitted', joinedDate: '2025-06-11' },
-  { id: 7, name: 'Venkatesh Rao', email: 'venkatesh@example.com', phone: '+91 98765 43216', totalEvents: 1, lastEvent: '2025-12-20', reviewStatus: 'pending', joinedDate: '2025-10-02' },
-  { id: 8, name: 'Deepa Krishnan', email: 'deepa@example.com', phone: '+91 98765 43217', totalEvents: 3, lastEvent: '2025-11-15', reviewStatus: 'submitted', joinedDate: '2025-02-28' },
-  { id: 9, name: 'Arun Pillai', email: 'arun@example.com', phone: '+91 98765 43218', totalEvents: 1, lastEvent: '2025-10-05', reviewStatus: 'pending', joinedDate: '2025-08-19' },
-];
 
 /* ─── Reducer ─────────────────────────────────────────────── */
 

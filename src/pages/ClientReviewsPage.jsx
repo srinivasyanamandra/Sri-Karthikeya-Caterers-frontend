@@ -102,7 +102,6 @@ const ClientReviewsPage = () => {
    * Read from the live hash after mount so App.js hash-sync has already run.
    * Using useRef for the token itself (it never changes after mount). */
   const [token, setToken] = useState('');
-  const [invitation, setInvitation] = useState(null);
   const [invitationStatus, setInvitationStatus] = useState('loading');
   // 'loading' | 'valid' | 'invalid' | 'no-token'
 
@@ -132,7 +131,6 @@ const ClientReviewsPage = () => {
       .getReviewInvitation(token)
       .then((data) => {
         if (cancelled) return;
-        setInvitation(data);
         setInvitationStatus('valid');
         setFormData((prev) => ({
           ...prev,

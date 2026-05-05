@@ -9,33 +9,6 @@ import { useToast } from './useToast';
    Mock data
    ================================================================ */
 
-const MOCK_SUBSCRIBERS = [
-  { id: 'sub-1', kind: 'subscriber', email: 'rajesh@example.com',  name: 'Rajesh Kumar',  source: 'website',  subscribedAt: '2025-12-15T10:30:00', campaignsSent: 12, status: 'active' },
-  { id: 'sub-2', kind: 'subscriber', email: 'priya@example.com',   name: 'Priya Sharma',  source: 'event',    subscribedAt: '2026-01-20T14:20:00', campaignsSent:  8, status: 'active' },
-  { id: 'sub-3', kind: 'subscriber', email: 'anand@example.com',   name: 'Anand Reddy',   source: 'website',  subscribedAt: '2026-02-10T09:15:00', campaignsSent:  5, status: 'active' },
-  { id: 'sub-4', kind: 'subscriber', email: 'lakshmi@example.com', name: 'Lakshmi Iyer',  source: 'referral', subscribedAt: '2025-11-05T16:45:00', campaignsSent: 15, status: 'active' },
-  { id: 'sub-5', kind: 'subscriber', email: 'kavitha@example.com', name: 'Kavitha Nair',  source: 'website',  subscribedAt: '2026-03-18T11:00:00', campaignsSent:  3, status: 'active' },
-  { id: 'sub-6', kind: 'subscriber', email: 'suresh@example.com',  name: 'Suresh Menon',  source: 'event',    subscribedAt: '2026-02-28T18:00:00', campaignsSent:  6, status: 'active' },
-];
-
-const MOCK_CLIENTS = [
-  { id: 'cli-1', kind: 'client', email: 'priya@example.com',     name: 'Priya Sharma',     phone: '+91 98765 43211', status: 'booked',     lastEvent: '2026-04-22' },
-  { id: 'cli-2', kind: 'client', email: 'rajesh@example.com',    name: 'Rajesh Kumar',     phone: '+91 98765 43210', status: 'booked',     lastEvent: '2026-03-15' },
-  { id: 'cli-3', kind: 'client', email: 'anand@example.com',     name: 'Anand Reddy',      phone: '+91 98765 43212', status: 'completed',  lastEvent: '2026-02-10' },
-  { id: 'cli-4', kind: 'client', email: 'venkatesh@example.com', name: 'Venkatesh Rao',    phone: '+91 98765 43216', status: 'lead',       lastEvent: null },
-  { id: 'cli-5', kind: 'client', email: 'lakshmi@example.com',   name: 'Lakshmi Iyer',     phone: '+91 98765 43213', status: 'completed',  lastEvent: '2026-04-01' },
-  { id: 'cli-6', kind: 'client', email: 'deepa@example.com',     name: 'Deepa Krishnan',   phone: '+91 98765 43217', status: 'quoted',     lastEvent: null },
-  { id: 'cli-7', kind: 'client', email: 'arun@example.com',      name: 'Arun Pillai',      phone: '+91 98765 43218', status: 'booked',     lastEvent: '2026-05-20' },
-];
-
-const MOCK_TEMPLATES = [
-  { id: 'tpl-newsletter',   name: 'Monthly Newsletter',         subject: 'This month at {{brand}}',                       icon: 'fa-newspaper',         intendedFor: 'subscriber' },
-  { id: 'tpl-promo',        name: 'Special Promotion',          subject: 'A small thank-you, on us — {{firstName}}',      icon: 'fa-tag',               intendedFor: 'any'        },
-  { id: 'tpl-announce',     name: 'Announcement',               subject: 'A note from our kitchen, {{firstName}}',        icon: 'fa-bullhorn',          intendedFor: 'any'        },
-  { id: 'tpl-followup',     name: 'Client follow-up',           subject: 'Thank you for choosing us, {{firstName}}',      icon: 'fa-handshake',         intendedFor: 'client'     },
-  { id: 'tpl-review-invite',name: 'Review invitation',          subject: 'How was the {{eventType}}, {{firstName}}?',     icon: 'fa-star',              intendedFor: 'client'     },
-];
-
 const STEPS = [
   { id: 'recipients', label: 'Recipients' },
   { id: 'templates',  label: 'Templates'  },

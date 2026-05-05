@@ -935,6 +935,7 @@ const SOURCE_BADGE = {
 
 const SubscribersPage = () => {
   const [subscribers, setSubscribers] = useState([]);
+  const [clientsCount, setClientsCount] = useState(0);
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState('');
   const [selected,    setSelected]    = useState([]); // ids of subscribers (for quick-launch wizard)
@@ -944,10 +945,13 @@ const SubscribersPage = () => {
 
   const reload = useCallback(() => {
     setLoading(true);
-    return adminApi
-      .listSubscribers({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' })
-      .then((data) => {
-        const items = Array.isArray(data?.items) ? data.items : [];
+    // Load both subscribers and clients count
+    return Promise.all([
+      adminApi.listSubscribers({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' }),
+      adminApi.listClients({ page: 0, size: 1, sortField: 'createdAt', sortDir: 'desc' })
+    ])
+      .then(([subscribersData, clientsData]) => {
+        const items = Array.isArray(subscribersData?.items) ? subscribersData.items : [];
         setSubscribers(
           items.map((s) => ({
             id: s.id,
@@ -960,9 +964,10 @@ const SubscribersPage = () => {
             isActive: s.isActive,
           }))
         );
+        setClientsCount(clientsData?.total || 0);
         setLoadError('');
       })
-      .catch((err) => setLoadError(err?.message || 'Could not load subscribers.'))
+      .catch((err) => setLoadError(err?.message || 'Could not load data.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -1026,7 +1031,7 @@ const SubscribersPage = () => {
         eyebrow="Email Campaigns"
         icon="fa-paper-plane"
         title="Email campaigns"
-        subtitle={`${stats.total.toLocaleString('en-IN')} subscribers · ${MOCK_CLIENTS.length} clients · ${stats.campaigns} campaigns sent · ${stats.avgOpenRate}% avg open rate`}
+        subtitle={`${stats.total.toLocaleString('en-IN')} subscribers · ${clientsCount} clients · ${stats.campaigns} campaigns sent · ${stats.avgOpenRate}% avg open rate`}
         intro="Pick recipients from both your subscribers and clients. Assign one template, one per audience, or one per person — preview, then send."
         actions={
           <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
@@ -1045,7 +1050,7 @@ const SubscribersPage = () => {
               <span className="admin-kpi-icon"><i className="fas fa-user-friends" /></span>
             </div>
             <div className="admin-kpi">
-              <span className="admin-kpi-value">{MOCK_CLIENTS.length}</span>
+              <span className="admin-kpi-value">{clientsCount}</span>
               <span className="admin-kpi-label">Clients reachable</span>
               <span className="admin-kpi-icon"><i className="fas fa-users" /></span>
             </div>

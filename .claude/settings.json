@@ -36,7 +36,8 @@
       "Bash(cp favicon.ico favicon.ico.react-default.bak)",
       "Bash(sips -s format png -Z 192 logo.png --out logo192.png)",
       "Bash(sips -s format png -Z 512 logo.png --out logo512.png)",
-      "Bash(sips -s format png -Z 64  logo.png --out favicon.png)"
+      "Bash(sips -s format png -Z 64  logo.png --out favicon.png)",
+      "Bash(echo \"EXIT $?\")"
     ],
     "additionalDirectories": [
       "/tmp/skc/src/components/layout",

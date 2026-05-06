@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigation } from '../../../contexts/NavigationContext';
 import { useClickOutside, useEscapeKey } from '../../../pages/admin/adminHooks';
+import { tokenStore } from '../../../services/api';
 
 const PAGE_META = {
   'admin-dashboard': { title: 'Dashboard', icon: 'fa-chart-line' },
@@ -12,11 +13,12 @@ const PAGE_META = {
   'admin-subscribers': { title: 'Subscribers', icon: 'fa-user-friends' },
 };
 
-const SAMPLE_NOTIFICATIONS = [
-  { id: 1, type: 'review',  message: 'New review submitted by Rajesh Kumar',     time: '2 hours ago', unread: true,  page: 'admin-reviews' },
-  { id: 2, type: 'quote',   message: 'Quote request from Priya Sharma',          time: '5 hours ago', unread: true,  page: 'admin-quotes' },
-  { id: 3, type: 'email',   message: 'Newsletter delivered to 1,834 subscribers', time: '1 day ago',  unread: false, page: 'admin-subscribers' },
-];
+/* Notifications feature is not yet wired to the backend — we surface an
+   empty list rather than fake placeholders so admins aren't misled into
+   thinking there are unread items waiting. When a real
+   `/api/admin/notifications` endpoint exists, swap this constant for a
+   useEffect-driven fetch and remove the empty-state copy below. */
+const SAMPLE_NOTIFICATIONS = [];
 
 const NOTIF_ICON = { review: 'fa-star', quote: 'fa-file-alt', email: 'fa-envelope' };
 
@@ -73,13 +75,11 @@ const AdminTopbar = ({ userEmail, onToggleSidebar }) => {
   );
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminTokenExpiry');
-      localStorage.removeItem('adminEmail');
-    } catch {
-      /* ignore */
-    }
+    /* Single source of truth for token storage — the api client owns the
+       three localStorage keys and the cleanup logic for them. Calling
+       tokenStore.clear() here keeps every logout site (topbar pill, user
+       dropdown, sidebar collapsed view) consistent. */
+    tokenStore.clear();
     navigate('admin-login');
   };
 
@@ -127,6 +127,20 @@ const AdminTopbar = ({ userEmail, onToggleSidebar }) => {
         </div>
 
         <div className="admin-topbar-right">
+          {/* Standalone, single-click sign-out — surfaced beside the user
+              menu so admins on shared/public devices can leave the panel
+              without hunting through a dropdown. */}
+          <button
+            type="button"
+            className="admin-topbar-icon-btn admin-topbar-logout-btn"
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <i className="fas fa-sign-out-alt" aria-hidden="true" />
+            <span className="admin-topbar-logout-label">Sign out</span>
+          </button>
+
           <div className="admin-topbar-notifications" ref={notifRef}>
             <button
               type="button"

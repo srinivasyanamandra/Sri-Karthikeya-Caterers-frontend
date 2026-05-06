@@ -1,63 +1,60 @@
-import { createContext, useContext } from 'react';
+import { useCallback } from 'react';
+import { useLocation, useNavigate as useRouterNavigate } from 'react-router-dom';
+import { idOf, pathOf } from '../constants/navigation';
 
 /**
+ * Backward-compatible navigation hooks built on top of react-router-dom.
+ *
+ * Historical context: this app shipped originally with hash-based routing
+ * driven by a `currentPage` state in App.js + a custom NavigationContext.
+ * Migrating to path-based URLs (e.g. `/contact` vs the old `/#contact`)
+ * could have required touching all 28 `navigate(...)` call sites. Instead,
+ * the public hook surface — `useNavigate`, `useCurrentPage`, `useNavigation`
+ * — is preserved verbatim and reimplemented over react-router. Existing
+ * callers continue to pass route ids (`navigate('contact')`); new callers
+ * may also pass absolute paths (`navigate('/contact')`).
+ *
  * @typedef  {Object}  NavigationValue
- * @property {string}                 currentPage
- * @property {(id: string) => void}   navigate
+ * @property {string}                 currentPage  Route id (e.g. 'contact').
+ * @property {(id: string) => void}   navigate     Accepts id OR absolute path.
  */
 
 /**
- * Navigation is split across two contexts so consumers re-render only when
- * the data they actually use changes:
- *
- *   - StateContext     holds `currentPage`. Changes on every navigation.
- *                      Only Header subscribes (for active-link styling).
- *   - DispatchContext  holds `navigate`. The setter from useState is
- *                      reference-stable across renders, so this context's
- *                      value never changes — its subscribers never re-render
- *                      due to navigation.
- *
- * Concretely: on every page change Header re-renders (correctly, to update
- * its active link), but Footer / FloatingCTA / WhatsAppFAB / BackToTop /
- * every home-section component skip the re-render entirely.
+ * Provider is now a passthrough — `<BrowserRouter>` in src/index.js owns the
+ * routing context. Kept for compatibility with any consumer that still imports
+ * it (and to give a clean migration path back to a custom router if needed).
  */
-const NavigationStateContext = createContext(null);
-const NavigationDispatchContext = createContext(null);
+export const NavigationProvider = ({ children }) => children;
 
 /**
- * Wraps the app root and exposes both contexts. Pass the same shape as before
- * — `{ currentPage, navigate }` — so call sites in App.js need no change.
+ * Current route id (e.g. 'contact', 'admin-dashboard'). Subscribes to
+ * route changes via react-router's location.
  */
-export const NavigationProvider = ({ value, children }) => (
-  <NavigationDispatchContext.Provider value={value.navigate}>
-    <NavigationStateContext.Provider value={value.currentPage}>
-      {children}
-    </NavigationStateContext.Provider>
-  </NavigationDispatchContext.Provider>
-);
-
-/** Read just the current page id. Subscribes to nav-change re-renders. */
 export const useCurrentPage = () => {
-  const value = useContext(NavigationStateContext);
-  if (value === null) {
-    throw new Error('useCurrentPage must be used within a <NavigationProvider>.');
-  }
-  return value;
-};
-
-/** Read just the navigate function. Reference-stable; never re-renders. */
-export const useNavigate = () => {
-  const value = useContext(NavigationDispatchContext);
-  if (value === null) {
-    throw new Error('useNavigate must be used within a <NavigationProvider>.');
-  }
-  return value;
+  const { pathname } = useLocation();
+  return idOf(pathname);
 };
 
 /**
- * Convenience for callers that genuinely need both. Re-renders on every
- * navigation (because of `useCurrentPage`), so prefer the specific hooks
- * unless you actually use `currentPage`.
+ * Returns a stable navigate function. Accepts either a legacy route id
+ * (`'contact'`) or an absolute path (`'/contact'`) — `pathOf()` handles both.
+ *
+ * Wrapped in `useCallback` so consumers passing this to memoised children
+ * don't trigger needless re-renders.
+ */
+export const useNavigate = () => {
+  const routerNavigate = useRouterNavigate();
+  return useCallback(
+    (idOrPath) => {
+      if (!idOrPath) return;
+      routerNavigate(pathOf(idOrPath));
+    },
+    [routerNavigate]
+  );
+};
+
+/**
+ * Convenience for callers that genuinely need both id and navigate.
  *
  * @returns {NavigationValue}
  */

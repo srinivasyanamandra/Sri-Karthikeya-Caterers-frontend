@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import { CONTACT } from '../../constants/contact';
 import { admin as adminApi, tokenStore } from '../../services/api';
+import { validateEmail } from '../../utils/validation';
 import { useToast } from './useToast';
 
 /** UI ↔ backend template-type mapping. */
@@ -24,14 +25,22 @@ const API_TO_UI_TYPE = {
 const mapServerTemplate = (t) => ({
   id: t.id,
   name: t.name || '',
+  /* Stable transactional code (e.g. SUBSCRIBE). Optional. Backend stores
+     it in upper-case; we round-trip it as-is. */
+  code: t.code || '',
   type: API_TO_UI_TYPE[(t.type || 'custom').toLowerCase()] || 'custom',
   subject: t.subject || '',
   preheader: t.preheader || '',
   blocks: Array.isArray(t.content?.blocks) ? t.content.blocks : [],
   description: t.content?.description || '',
   isActive: t.isActive !== false,
-  lastModified: (t.updatedAt || t.createdAt || '').slice(0, 10),
-  usageCount: 0,
+  /* updatedAt/createdAt are ISO 8601 strings. Slice the first 10 chars
+     (yyyy-mm-dd) when present; leave empty when neither is set so the
+     formatter below can decide how to display "—". */
+  lastModified: ((t.updatedAt || t.createdAt) || '').slice(0, 10),
+  /* Backend doesn't return per-template send counts yet; surface as null
+     so the UI can render an em-dash rather than a misleading "0 sent". */
+  usageCount: null,
   _content: t.content || {},
 });
 
@@ -53,14 +62,14 @@ const TEMPLATE_SEEDS = {
       {
         id: 'b2',
         type: 'paragraph',
-        text: 'Dear {{client_name}}, thank you for choosing Sri Karthikeya Caterers for your {{event_type}} on {{event_date}}. We hope every dish, every detail, and every moment lived up to the occasion.',
+        text: 'Dear {{clientName}}, thank you for choosing Sri Karthikeya Caterers for your {{eventType}} on {{eventDate}}. We hope every dish, every detail, and every moment lived up to the occasion.',
       },
       {
         id: 'b3',
         type: 'paragraph',
         text: 'A short note from you — even just two lines — helps families planning their own celebrations decide with confidence. Would you mind sharing your experience?',
       },
-      { id: 'b4', type: 'button', text: 'Share my review', url: '{{review_link}}' },
+      { id: 'b4', type: 'button', text: 'Share my review', url: '{{reviewLink}}' },
       { id: 'b5', type: 'divider' },
       {
         id: 'b6',
@@ -74,11 +83,11 @@ const TEMPLATE_SEEDS = {
     description: 'Thank a client for choosing our catering services.',
     subject: 'Thank you for trusting Sri Karthikeya Caterers',
     blocks: [
-      { id: 'b1', type: 'heading', text: 'Thank you, {{client_name}}' },
+      { id: 'b1', type: 'heading', text: 'Thank you, {{clientName}}' },
       {
         id: 'b2',
         type: 'paragraph',
-        text: 'It was a privilege to be part of your {{event_type}}. Hosting your guests with authentic, pure-vegetarian cuisine is the kind of work that gives our team meaning.',
+        text: 'It was a privilege to be part of your {{eventType}}. Hosting your guests with authentic, pure-vegetarian cuisine is the kind of work that gives our team meaning.',
       },
       {
         id: 'b3',
@@ -102,7 +111,7 @@ const TEMPLATE_SEEDS = {
       {
         id: 'b2',
         type: 'paragraph',
-        text: 'Hello {{first_name}}, our chefs have been busy. This month we are introducing seasonal Andhra and Telangana specials that bring the freshest produce of summer to your table.',
+        text: 'Hello {{firstName}}, our chefs have been busy. This month we are introducing seasonal Andhra and Telangana specials that bring the freshest produce of summer to your table.',
       },
       { id: 'b3', type: 'subheading', text: 'New on the menu' },
       {
@@ -124,13 +133,13 @@ const TEMPLATE_SEEDS = {
     description: 'Follow up on a pending quote request.',
     subject: 'Your catering quote — Sri Karthikeya Caterers',
     blocks: [
-      { id: 'b1', type: 'heading', text: 'Your quote, {{client_name}}' },
+      { id: 'b1', type: 'heading', text: 'Your quote, {{clientName}}' },
       {
         id: 'b2',
         type: 'paragraph',
-        text: 'Thank you for the enquiry. We have prepared a tailored quote for your {{event_type}} on {{event_date}} for {{guest_count}} guests.',
+        text: 'Thank you for the enquiry. We have prepared a tailored quote for your {{eventType}} on {{eventDate}} for {{guests}} guests.',
       },
-      { id: 'b3', type: 'button', text: 'Open my quote', url: '{{quote_link}}' },
+      { id: 'b3', type: 'button', text: 'Open my quote', url: '{{quoteLink}}' },
       {
         id: 'b4',
         type: 'paragraph',
@@ -179,14 +188,24 @@ const TYPE_ICON = {
   custom: 'fa-envelope',
 };
 
+/**
+ * Variable placeholder catalogue surfaced in the editor's right rail.
+ * Names are camelCase to match the keys the backend's EmailService.render
+ * substitutes against — e.g. QuoteService writes `vars.put("clientName", ...)`,
+ * `vars.put("eventType", ...)`. Snake-case placeholders (the previous
+ * convention here) never resolved at send time and shipped as literal text
+ * to recipients.
+ */
 const VARIABLES = [
-  '{{client_name}}',
-  '{{first_name}}',
-  '{{event_type}}',
-  '{{event_date}}',
-  '{{guest_count}}',
-  '{{review_link}}',
-  '{{quote_link}}',
+  '{{clientName}}',
+  '{{firstName}}',
+  '{{eventType}}',
+  '{{eventDate}}',
+  '{{guests}}',
+  '{{reviewLink}}',
+  '{{quoteLink}}',
+  '{{brand}}',
+  '{{year}}',
 ];
 
 const BLOCK_TYPES = [
@@ -200,25 +219,54 @@ const BLOCK_TYPES = [
   { type: 'image', label: 'Image', icon: 'fa-image' },
 ];
 
-const formatDate = (s) =>
-  new Date(s).toLocaleDateString('en-IN', {
+/**
+ * Safe ISO date formatter — returns an em-dash for null/empty/invalid input
+ * rather than the JS default "Invalid Date" string which leaks raw API
+ * gaps into the UI. Templates without an updatedAt are rare but possible
+ * (e.g. fresh installs before any save), and the empty string previously
+ * surfaced as "Invalid Date" in every card.
+ */
+const formatDate = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-IN', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
+};
 
-const uid = () => `b${Date.now()}_${Math.floor(Math.random() * 9999)}`;
+/**
+ * Block id generator. Prefers crypto.randomUUID (collision-free) and falls
+ * back to a Date+random combo for older browsers / non-secure contexts.
+ */
+const uid = () => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `b${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    }
+  } catch { /* fall through */ }
+  return `b${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+};
 
 const renderInline = (text) => (text || '').replace(/\n/g, '<br>');
 
+/**
+ * Preview-time placeholder values. Keys MUST match the camelCase
+ * placeholders used in templates (and in the backend's variable map),
+ * otherwise the live preview won't reflect what recipients actually see.
+ */
 const SAMPLE_VARS = {
-  '{{client_name}}': '[Client Name]',
-  '{{first_name}}': '[First Name]',
-  '{{event_type}}': 'Wedding',
-  '{{event_date}}': '15 April 2026',
-  '{{guest_count}}': '500',
-  '{{review_link}}': 'https://srikarthikeyacaterers.in/review/abc123',
-  '{{quote_link}}': 'https://srikarthikeyacaterers.in/quote/abc123',
+  '{{clientName}}': '[Client Name]',
+  '{{firstName}}':  '[First Name]',
+  '{{eventType}}':  'Wedding',
+  '{{eventDate}}':  '15 April 2026',
+  '{{guests}}':     '500',
+  '{{reviewLink}}': 'https://srikarthikeyacaterers.in/review/abc123',
+  '{{quoteLink}}':  'https://srikarthikeyacaterers.in/quote/abc123',
+  '{{brand}}':      'Sri Karthikeya Caterers',
+  '{{year}}':       String(new Date().getFullYear()),
 };
 
 const fillSample = (text) =>
@@ -344,7 +392,7 @@ const EditorBlock = ({ block, onChange, onRemove, onMove, onSelect, isSelected }
         <textarea
           value={block.text}
           onChange={(e) => onChange({ text: e.target.value })}
-          placeholder="Write your paragraph. Variables are supported, e.g. {{client_name}}"
+          placeholder="Write your paragraph. Variables are supported, e.g. {{clientName}}"
         />
       )}
       {block.type === 'quote' && (
@@ -366,7 +414,7 @@ const EditorBlock = ({ block, onChange, onRemove, onMove, onSelect, isSelected }
             type="text"
             value={block.url || ''}
             onChange={(e) => onChange({ url: e.target.value })}
-            placeholder="https://… or {{review_link}}"
+            placeholder="https://… or {{reviewLink}}"
           />
         </div>
       )}
@@ -414,41 +462,83 @@ const EmailBuilderPage = () => {
 
   // Editor state
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');           // optional transactional id (e.g. SUBSCRIBE)
   const [type, setType] = useState('custom');
   const [subject, setSubject] = useState('');
   const [preheader, setPreheader] = useState('');
+  const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [blocks, setBlocks] = useState([]);
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [device, setDevice] = useState('desktop');
 
-  const reload = () => {
+  /* Dirty-tracking: flips to true on the first edit after entering the
+     editor; clears on save / cancel. Drives the unsaved-changes guard
+     and the browser beforeunload prompt. */
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = useCallback(() => setIsDirty(true), []);
+
+  /* Tracks whether the component is still mounted, so async fetch
+     resolutions don't call setState on a torn-down tree. */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const reload = useCallback(() => {
     setLoading(true);
     return adminApi
       .listTemplates({ page: 0, size: 100, sortField: 'updatedAt', sortDir: 'desc' })
       .then((data) => {
+        if (!mountedRef.current) return;
         const items = Array.isArray(data?.items) ? data.items : [];
         setTemplates(items.map(mapServerTemplate));
         setLoadError('');
       })
-      .catch((err) => setLoadError(err?.message || 'Could not load templates.'))
-      .finally(() => setLoading(false));
-  };
+      .catch((err) => {
+        if (!mountedRef.current) return;
+        setLoadError(err?.message || 'Could not load templates.');
+      })
+      .finally(() => {
+        if (!mountedRef.current) return;
+        setLoading(false);
+      });
+  }, []);
 
   useEffect(() => {
     reload();
     // suppress unused-warning for the seed array kept for design reference
     // eslint-disable-next-line no-unused-vars
     const _seed = DEFAULT_TEMPLATES;
-  }, []);
+  }, [reload]);
+
+  /* Browser-level guard: protects against accidental reload / tab-close
+     while editing. The in-app exit button uses confirmExit() below for
+     a friendlier message; this hook only fires when the user's intent
+     is to leave the entire page, which the SPA can't intercept. */
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = ''; // Firefox / Safari require this
+      return '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const isEditing = editingId !== null;
 
   const startNew = () => {
     setEditingId('new');
     setName('');
+    setCode('');
     setType('custom');
     setSubject('');
     setPreheader('');
+    setDescription('');
+    setIsActive(true);
     setBlocks([
       { id: uid(), type: 'heading', text: 'A short, warm headline' },
       {
@@ -457,21 +547,42 @@ const EmailBuilderPage = () => {
         text: 'Write your message here. Use the block library on the left to add buttons, quotes, dividers, and images.',
       },
     ]);
+    setIsDirty(false);
   };
 
   const startEdit = (tpl) => {
     setEditingId(tpl.id);
     setName(tpl.name);
+    setCode(tpl.code || '');
     setType(tpl.type);
     setSubject(tpl.subject);
     setPreheader(tpl.preheader || '');
+    setDescription(tpl.description || '');
+    setIsActive(tpl.isActive !== false);
     setBlocks(tpl.blocks.map((b) => ({ ...b })));
+    setIsDirty(false);
   };
 
-  const exitEditor = () => {
+  /**
+   * In-app exit guard. If the editor has unsaved changes, prompt before
+   * tearing it down so a stray click on "Back to library" doesn't lose
+   * fifteen minutes of typing. Returns true if the exit went through,
+   * false if the user cancelled — call sites can use this for any
+   * follow-up navigation that should also be blocked.
+   */
+  const confirmExit = useCallback(() => {
+    if (isDirty) {
+      const proceed = window.confirm(
+        'You have unsaved changes. Leave the editor and discard them?'
+      );
+      if (!proceed) return false;
+    }
     setEditingId(null);
     setSelectedBlockId(null);
-  };
+    setIsDirty(false);
+    return true;
+  }, [isDirty]);
+
 
   const addBlock = (blockType) => {
     const seed =
@@ -491,15 +602,18 @@ const EmailBuilderPage = () => {
     const block = { id: uid(), type: blockType, ...seed };
     setBlocks((prev) => [...prev, block]);
     setSelectedBlockId(block.id);
+    markDirty();
   };
 
   const updateBlock = (id, patch) => {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    markDirty();
   };
 
   const removeBlock = (id) => {
     setBlocks((prev) => prev.filter((b) => b.id !== id));
     if (selectedBlockId === id) setSelectedBlockId(null);
+    markDirty();
   };
 
   const moveBlock = (id, dir) => {
@@ -512,6 +626,7 @@ const EmailBuilderPage = () => {
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+    markDirty();
   };
 
   const insertVariableIntoSelected = (variable) => {
@@ -521,117 +636,12 @@ const EmailBuilderPage = () => {
     updateBlock(block.id, { text: (block.text || '') + ' ' + variable });
   };
 
-  const handleSave = async () => {
-    if (!name.trim() || !subject.trim()) {
-      toast.warning('Please give your template a name and a subject before saving.');
-      return;
-    }
-    setSaving(true);
-    try {
-      // exportedHtml is defined further down via useMemo on the same `blocks` state.
-      // We call it indirectly by re-reading from the closure — see exportedHtml below.
-      const description =
-        TEMPLATE_SEEDS[type]?.description ||
-        'Custom email template for ad-hoc campaigns.';
-      const apiType = UI_TO_API_TYPE[type] || 'CUSTOM';
-
-      const payload = {
-        name: name.trim(),
-        type: apiType,
-        subject,
-        preheader,
-        content: {
-          html: exportedHtml,
-          text: blocks
-            .map((b) => (b.text ? String(b.text) : ''))
-            .filter(Boolean)
-            .join('\n\n'),
-          blocks,
-          description,
-        },
-        isActive: true,
-      };
-
-      let saved;
-      if (editingId === 'new') {
-        saved = await adminApi.createTemplate(payload);
-        toast.success('Template created.');
-      } else {
-        saved = await adminApi.updateTemplate(editingId, payload);
-        toast.success('Template updated.');
-      }
-      const mapped = mapServerTemplate(saved);
-      setTemplates((prev) => {
-        const idx = prev.findIndex((t) => t.id === mapped.id);
-        if (idx === -1) return [mapped, ...prev];
-        const next = [...prev];
-        next[idx] = mapped;
-        return next;
-      });
-      exitEditor();
-    } catch (err) {
-      toast.error(err?.message || 'Could not save template.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDuplicate = async (tpl) => {
-    setSaving(true);
-    try {
-      const apiType = UI_TO_API_TYPE[tpl.type] || 'CUSTOM';
-      const created = await adminApi.createTemplate({
-        name: `${tpl.name} (copy)`,
-        type: apiType,
-        subject: tpl.subject,
-        preheader: tpl.preheader,
-        content: tpl._content || { blocks: tpl.blocks || [] },
-        isActive: true,
-      });
-      setTemplates((prev) => [mapServerTemplate(created), ...prev]);
-      toast.success('Template duplicated.');
-    } catch (err) {
-      toast.error(err?.message || 'Could not duplicate template.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this template? This cannot be undone.')) return;
-    try {
-      await adminApi.deleteTemplate(id);
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
-      toast.success('Template deleted.');
-    } catch (err) {
-      toast.error(err?.message || 'Could not delete template.');
-    }
-  };
-
-  const handleTestSend = async (id) => {
-    const adminEmail = tokenStore.email() || '';
-    const to = window.prompt('Send test email to:', adminEmail);
-    if (!to) return;
-    setTesting(true);
-    try {
-      // Pass null for name so backend derives it from the email address
-      const result = await adminApi.testTemplate(id, { to, name: null });
-      if (result?.ok) {
-        toast.success(`Test email sent to ${to}.`);
-      } else {
-        toast.error(result?.error || 'Test send failed.');
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Test send failed.');
-    } finally {
-      setTesting(false);
-    }
-  };
-
   /* Real, sendable HTML export — wraps the blocks in inline-styled,
      table-based markup that renders correctly in major email clients
-     (Gmail, Outlook, Apple Mail). Used for "Send test" and as the
-     payload backend would dispatch. */
+     (Gmail, Outlook, Apple Mail). Memoised on the visible inputs so it
+     re-computes only when the recipient-visible content changes.
+     Defined BEFORE handleSave so it's unambiguously in scope at every
+     call site (formerly declared after — relied on closure semantics). */
   const exportedHtml = useMemo(() => {
     const blockHtml = blocks
       .map((b) => {
@@ -687,36 +697,164 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
 <tr><td style="background:#faf7f1;padding:24px 32px;border-top:1px solid #e6dfd1;text-align:center;font-size:12px;color:#7c7e74;line-height:1.6;">
 <p style="margin:0 0 6px;"><strong style="color:#143a26;">${CONTACT.brand}</strong></p>
 <p style="margin:0 0 6px;">${CONTACT.primaryPhone?.label || ''} · <a href="mailto:${CONTACT.email || ''}" style="color:#a06d20;text-decoration:none;">${CONTACT.email || ''}</a></p>
-<p style="margin:10px 0 0;font-size:11px;color:#a3a59a;">You are receiving this because you booked with us or subscribed to updates.<br/>To unsubscribe, <a href="{{unsubscribe_url}}" style="color:#a06d20;">click here</a>.</p>
+<p style="margin:10px 0 0;font-size:11px;color:#a3a59a;">You are receiving this because you booked with us or subscribed to updates.<br/>To unsubscribe, <a href="{{unsubscribeUrl}}" style="color:#a06d20;">click here</a>.</p>
 </td></tr>
 </table>
 </td></tr></table>
 </body></html>`;
   }, [blocks, subject, preheader]);
 
-  const handleSendTest = async () => {
-    if (editingId === 'new' || !editingId) {
-      toast.warning('Save the template first, then send a test.');
+  const handleSave = async () => {
+    if (!name.trim() || !subject.trim()) {
+      toast.warning('Please give your template a name and a subject before saving.');
       return;
     }
-    const adminEmail = tokenStore.email() || '';
-    const email = window.prompt('Send a test of this email to:', adminEmail);
-    if (!email) return;
-    setTesting(true);
+    /* Optional code (e.g. SUBSCRIBE) must be ASCII alpha-numerics + underscore;
+       backend stores it upper-cased and uses it as a transactional lookup
+       key. Empty is fine — the backend treats null/empty as "no code". */
+    const trimmedCode = (code || '').trim();
+    if (trimmedCode && !/^[A-Za-z0-9_]{2,60}$/.test(trimmedCode)) {
+      toast.warning('Template code may only contain letters, numbers, and underscores (2–60 chars).');
+      return;
+    }
+    setSaving(true);
     try {
-      // Pass null for name so backend derives it from the email address
-      const result = await adminApi.testTemplate(editingId, { to: email, name: null });
-      if (result?.ok) {
-        toast.success(`Test email sent to ${email}.`);
+      const finalDescription =
+        (description || '').trim() ||
+        TEMPLATE_SEEDS[type]?.description ||
+        'Custom email template for ad-hoc campaigns.';
+      const apiType = UI_TO_API_TYPE[type] || 'CUSTOM';
+
+      const payload = {
+        name: name.trim(),
+        code: trimmedCode || null,
+        type: apiType,
+        subject,
+        preheader,
+        content: {
+          html: exportedHtml,
+          text: blocks
+            .map((b) => (b.text ? String(b.text) : ''))
+            .filter(Boolean)
+            .join('\n\n'),
+          blocks,
+          description: finalDescription,
+        },
+        isActive,
+      };
+
+      let saved;
+      if (editingId === 'new') {
+        saved = await adminApi.createTemplate(payload);
+        toast.success('Template created.');
       } else {
-        toast.error(result?.error || 'Test send failed.');
+        saved = await adminApi.updateTemplate(editingId, payload);
+        toast.success('Template updated.');
       }
+      const mapped = mapServerTemplate(saved);
+      setTemplates((prev) => {
+        const idx = prev.findIndex((t) => t.id === mapped.id);
+        if (idx === -1) return [mapped, ...prev];
+        const next = [...prev];
+        next[idx] = mapped;
+        return next;
+      });
+      /* Clear dirty FIRST so confirmExit takes the no-prompt branch on
+         the way out — saving has already persisted everything. */
+      setIsDirty(false);
+      setEditingId(null);
+      setSelectedBlockId(null);
     } catch (err) {
-      toast.error(err?.message || 'Test send failed.');
+      /* Surface field-level errors when present (e.g. ConflictException
+         on duplicate name or code → backend returns 409 with fields). */
+      if (err?.fields?.code) {
+        toast.error(`Code: ${err.fields.code}`);
+      } else if (err?.fields?.name) {
+        toast.error(`Name: ${err.fields.name}`);
+      } else {
+        toast.error(err?.message || 'Could not save template.');
+      }
     } finally {
-      setTesting(false);
+      setSaving(false);
     }
   };
+
+  const handleDuplicate = async (tpl) => {
+    setSaving(true);
+    try {
+      const apiType = UI_TO_API_TYPE[tpl.type] || 'CUSTOM';
+      const created = await adminApi.createTemplate({
+        name: `${tpl.name} (copy)`,
+        type: apiType,
+        subject: tpl.subject,
+        preheader: tpl.preheader,
+        content: tpl._content || { blocks: tpl.blocks || [] },
+        isActive: true,
+      });
+      setTemplates((prev) => [mapServerTemplate(created), ...prev]);
+      toast.success('Template duplicated.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not duplicate template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this template? This cannot be undone.')) return;
+    try {
+      await adminApi.deleteTemplate(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast.success('Template deleted.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete template.');
+    }
+  };
+
+  /**
+   * Single test-send helper used by both the list and the editor.
+   * Prompts for a recipient (defaulting to the admin's own email),
+   * validates the address client-side before hitting the API, and
+   * surfaces success/failure via toast.
+   */
+  const sendTestEmail = useCallback(
+    async (templateId) => {
+      if (!templateId || templateId === 'new') {
+        toast.warning('Save the template first, then send a test.');
+        return;
+      }
+      const adminEmail = tokenStore.email() || '';
+      const to = window.prompt('Send test email to:', adminEmail);
+      if (to === null) return; // cancelled
+      const cleaned = (to || '').trim().toLowerCase();
+      if (!cleaned) {
+        toast.warning('Please enter an email address.');
+        return;
+      }
+      if (!validateEmail(cleaned)) {
+        toast.error(`"${to}" is not a valid email address.`);
+        return;
+      }
+      setTesting(true);
+      try {
+        // Pass null for name so backend derives it from the email address
+        const result = await adminApi.testTemplate(templateId, { to: cleaned, name: null });
+        if (result?.ok) {
+          toast.success(`Test email sent to ${cleaned}.`);
+        } else {
+          toast.error(result?.error || 'Test send failed.');
+        }
+      } catch (err) {
+        toast.error(err?.message || 'Test send failed.');
+      } finally {
+        if (mountedRef.current) setTesting(false);
+      }
+    },
+    [toast]
+  );
+
+  const handleSendTest = () => sendTestEmail(editingId);
+  const handleTestSend = (id) => sendTestEmail(id);
 
   /* ─────────────── List view ─────────────── */
   if (!isEditing) {
@@ -752,8 +890,15 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
                 </span>
               </div>
               <div className="admin-toolbar-right">
-                <button type="button" className="btn btn-ghost">
-                  <i className="fas fa-folder-open" aria-hidden="true"></i> Library
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={reload}
+                  disabled={loading}
+                  title="Reload templates"
+                >
+                  <i className={`fas fa-arrows-rotate${loading ? ' fa-spin' : ''}`} aria-hidden="true"></i>
+                  Refresh
                 </button>
                 <button type="button" className="btn btn-primary" onClick={startNew}>
                   <i className="fas fa-plus" aria-hidden="true"></i> New template
@@ -779,25 +924,75 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
             ) : (
               <div className="admin-quick-actions">
                 {templates.map((tpl) => (
-                  <article key={tpl.id} className="admin-action-card">
+                  <article
+                    key={tpl.id}
+                    className={`admin-action-card${tpl.isActive ? '' : ' is-inactive'}`}
+                  >
                     <span className="admin-action-icon">
                       <i
                         className={`fas ${TYPE_ICON[tpl.type] || 'fa-envelope'}`}
                         aria-hidden="true"
                       ></i>
                     </span>
-                    <h3>{tpl.name}</h3>
-                    <p>{tpl.description}</p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <h3 style={{ margin: 0 }}>{tpl.name}</h3>
+                      {/* Code badge — surfaces the transactional id (e.g.
+                          SUBSCRIBE) so admins can identify which email
+                          drives which automated flow at a glance. */}
+                      {tpl.code && (
+                        <span
+                          className="admin-badge"
+                          style={{
+                            background: 'var(--color-accent-soft)',
+                            color: 'var(--color-accent-dark)',
+                            fontSize: 10,
+                            letterSpacing: '0.08em',
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            fontWeight: 600,
+                          }}
+                          title={`Transactional code: ${tpl.code}`}
+                        >
+                          {tpl.code}
+                        </span>
+                      )}
+                      {!tpl.isActive && (
+                        <span
+                          className="admin-badge"
+                          style={{
+                            background: 'rgba(125,125,125,0.12)',
+                            color: 'var(--color-text-muted)',
+                            fontSize: 10,
+                            letterSpacing: '0.08em',
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    <p>{tpl.description || 'No description.'}</p>
 
                     <div className="admin-meta-row mb-4">
                       <span>
                         <i className="fas fa-calendar" aria-hidden="true"></i>
                         {formatDate(tpl.lastModified)}
                       </span>
-                      <span>
-                        <i className="fas fa-paper-plane" aria-hidden="true"></i>
-                        {tpl.usageCount} sent
-                      </span>
+                      {tpl.usageCount != null && (
+                        <span>
+                          <i className="fas fa-paper-plane" aria-hidden="true"></i>
+                          {tpl.usageCount} sent
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex-row">
@@ -853,10 +1048,14 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
       <AdminPageHero
         eyebrow="Email Builder"
         icon="fa-pen-to-square"
-        title={editingId === 'new' ? 'New template' : 'Edit template'}
-        intro="Build the email block by block. The preview on the right reflects exactly what the recipient will see."
+        title={(editingId === 'new' ? 'New template' : 'Edit template') + (isDirty ? ' •' : '')}
+        intro={
+          isDirty
+            ? 'Unsaved changes — click Save template to persist them.'
+            : 'Build the email block by block. The preview on the right reflects exactly what the recipient will see.'
+        }
         actions={
-          <button type="button" className="btn btn-ghost" onClick={exitEditor}>
+          <button type="button" className="btn btn-ghost" onClick={confirmExit}>
             <i className="fas fa-arrow-left" aria-hidden="true" /> Back to library
           </button>
         }
@@ -866,23 +1065,46 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
         <div className="container">
           <div className="admin-toolbar">
             <div className="admin-toolbar-left">
-              <button type="button" className="btn btn-ghost" onClick={exitEditor}>
+              <button type="button" className="btn btn-ghost" onClick={confirmExit}>
                 <i className="fas fa-arrow-left" aria-hidden="true"></i> Back to templates
               </button>
+              {isDirty && (
+                <span
+                  className="admin-subhead"
+                  style={{
+                    marginLeft: 12,
+                    marginBottom: 0,
+                    color: 'var(--color-accent-dark)',
+                    fontWeight: 600,
+                  }}
+                >
+                  <i className="fas fa-circle" style={{ fontSize: 6, verticalAlign: 'middle' }} aria-hidden="true" /> Unsaved
+                </span>
+              )}
             </div>
             <div className="admin-toolbar-right">
               <button type="button" className="btn btn-ghost" onClick={handleSendTest} disabled={testing || saving}>
                 <i className="fas fa-paper-plane" aria-hidden="true"></i>
                 {testing ? ' Sending…' : ' Send test'}
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSave}
+                /* For an existing template (numeric/UUID id), disable Save
+                   until something changes — prevents needless writes and
+                   makes the button's state mirror reality. For a brand-
+                   new template, leave it enabled so users can save the
+                   seed content if that's what they want. */
+                disabled={saving || (editingId !== 'new' && !isDirty)}
+              >
                 <i className="fas fa-check" aria-hidden="true"></i>
                 {saving ? ' Saving…' : ' Save template'}
               </button>
             </div>
           </div>
 
-          {/* Subject + name row */}
+          {/* Subject + name + metadata row */}
           <div className="admin-surface mb-5">
             <div className="form-row">
               <div className="form-group">
@@ -891,7 +1113,7 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
                   id="tplName"
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { setName(e.target.value); markDirty(); }}
                   placeholder="e.g. April newsletter"
                 />
               </div>
@@ -900,7 +1122,7 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
                 <select
                   id="tplType"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(e) => { setType(e.target.value); markDirty(); }}
                 >
                   <option value="custom">Custom</option>
                   <option value="review_invitation">Review invitation</option>
@@ -910,24 +1132,92 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
                 </select>
               </div>
             </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="tplCode">
+                  Transactional code
+                  <span className="form-label-hint">Optional</span>
+                </label>
+                <input
+                  id="tplCode"
+                  type="text"
+                  value={code}
+                  onChange={(e) => {
+                    /* Code is canonicalised to upper-case + restricted to
+                       safe characters to keep client-side and server-side
+                       validation in lockstep. */
+                    const next = e.target.value.replace(/[^A-Za-z0-9_]/g, '').toUpperCase();
+                    setCode(next);
+                    markDirty();
+                  }}
+                  placeholder="e.g. SUBSCRIBE, REVIEW_INVITE"
+                  maxLength={60}
+                  spellCheck="false"
+                  autoComplete="off"
+                />
+                <small style={{ display: 'block', marginTop: 4, color: 'var(--text-light)', fontSize: 12 }}>
+                  Stable id used by automated flows (e.g. <code>SUBSCRIBE</code> for
+                  the welcome email). Letters, numbers, underscores only.
+                </small>
+              </div>
+              <div className="form-group">
+                <label htmlFor="tplActive">Status</label>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    minHeight: 44,
+                  }}
+                >
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      id="tplActive"
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => { setIsActive(e.target.checked); markDirty(); }}
+                      style={{ width: 18, height: 18, accentColor: 'var(--color-accent)' }}
+                    />
+                    <span>{isActive ? 'Active' : 'Inactive'}</span>
+                  </label>
+                  <small style={{ color: 'var(--text-light)', fontSize: 12 }}>
+                    Inactive templates are hidden from automated flows but kept on file.
+                  </small>
+                </div>
+              </div>
+            </div>
             <div className="form-group">
               <label htmlFor="tplSubject">Subject line</label>
               <input
                 id="tplSubject"
                 type="text"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => { setSubject(e.target.value); markDirty(); }}
                 placeholder="A short, descriptive subject"
               />
             </div>
-            <div className="form-group mb-0">
+            <div className="form-group">
               <label htmlFor="tplPreheader">Preheader (preview text)</label>
               <input
                 id="tplPreheader"
                 type="text"
                 value={preheader}
-                onChange={(e) => setPreheader(e.target.value)}
+                onChange={(e) => { setPreheader(e.target.value); markDirty(); }}
                 placeholder="A line shown next to the subject in most inboxes"
+              />
+            </div>
+            <div className="form-group mb-0">
+              <label htmlFor="tplDescription">
+                Description
+                <span className="form-label-hint">Internal — shown on the template card</span>
+              </label>
+              <input
+                id="tplDescription"
+                type="text"
+                value={description}
+                onChange={(e) => { setDescription(e.target.value); markDirty(); }}
+                placeholder="Short, internal note for the team"
+                maxLength={140}
               />
             </div>
           </div>

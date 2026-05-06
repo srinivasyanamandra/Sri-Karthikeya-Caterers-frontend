@@ -1,7 +1,10 @@
 /**
  * API client for the Sri Karthikeya Caterers backend.
  *
- * - Reads base URL from REACT_APP_API_URL (defaults to http://localhost:8080)
+ * - Reads base URL from REACT_APP_API_URL (defaults to the deployed Render
+ *   instance at https://skc-backend-5o4z.onrender.com). Override with a
+ *   `.env.local` containing REACT_APP_API_URL=http://localhost:8080 to run
+ *   the frontend against a local Spring Boot backend.
  * - Attaches Authorization: Bearer <jwt> on admin requests
  * - Normalizes the backend's `{error, message, fields, traceId}` envelope
  *   into a thrown ApiError so callers can render `err.message` / `err.fields`
@@ -10,7 +13,7 @@
  */
 
 const API_URL =
-  (process.env.REACT_APP_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
+  (process.env.REACT_APP_API_URL || 'https://skc-backend-5o4z.onrender.com').replace(/\/+$/, '');
 
 const TOKEN_KEY = 'adminToken';
 const TOKEN_EXPIRY_KEY = 'adminTokenExpiry';

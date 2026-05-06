@@ -36,7 +36,13 @@ const SendInvitationPage = () => {
           phone: c.phone,
         })));
       })
-      .catch(() => { /* silent: directory is optional */ });
+      .catch((err) => {
+        /* The directory is optional — admins can still invite by typing a
+           name and email manually — but a silent swallow hides real
+           backend failures. Log to the console so devtools surfaces it. */
+        // eslint-disable-next-line no-console
+        console.warn('Could not load client directory:', err?.message || err);
+      });
     return () => { cancelled = true; };
   }, []);
 

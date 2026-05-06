@@ -1,30 +1,31 @@
 /**
  * Application root.
  *
- * Owns three responsibilities and only those three:
- *   1. State of the current page id and the opening splash flag.
- *   2. Resolution of that page id to a React component (PAGE_REGISTRY).
- *   3. Composition of the global chrome — header, footer, scroll progress,
- *      and three floating action buttons.
- *
- * Navigation is exposed via NavigationContext. Descendants read with
- * `useNavigation()` and never receive `setCurrentPage` as a prop.
+ * Owns four responsibilities and only those four:
+ *   1. Splash-on-first-load gating.
+ *   2. Global chrome composition (header, footer, scroll progress, FABs).
+ *   3. Route declarations via react-router-dom (path-based URLs, no hash).
+ *   4. Admin auth gate + global "auth-expired" event listener that bounces
+ *      back to the login screen.
  *
  * Routing model:
- *   The active page lives in React state, not in the URL. This is a
- *   deliberate trade-off documented in CLAUDE.md — the site has no server
- *   rewriter for SPA routes, so URL-based routing would break refreshes on
- *   non-root paths. Consequence: no browser back/forward, no deep links,
- *   no per-page SEO. If those become requirements, see the migration note
- *   at the foot of this file.
+ *   We use `<BrowserRouter>` (set up in src/index.js). URLs look like
+ *   `/contact`, `/menus`, `/admin/dashboard` — no hash. For static-host
+ *   deployments (Vercel/Netlify/Render-static), the SPA-fallback config
+ *   in `vercel.json` rewrites all 404s to `/index.html`.
+ *
+ *   The legacy hash form `/#contact?t=abc` is migrated on first load by
+ *   `useLegacyHashRedirect` — a one-shot effect that rewrites the URL to
+ *   the new path-based form so old emailed links keep working.
  *
  * Code splitting:
  *   Every non-Home page is loaded via React.lazy. Most home-page visitors
- *   never visit the other pages; their chunks are deferred and only fetched
- *   on first navigation, then cached.
+ *   never reach the others; chunks are deferred and only fetched on first
+ *   navigation, then cached.
  */
 
-import React, { lazy, Suspense, useEffect, useMemo, useState, useRef } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
+import { Route, Routes, useLocation, useNavigate as useRouterNavigate } from 'react-router-dom';
 import './App.css';
 import './Pages.css';
 import './Admin.css';
@@ -43,89 +44,48 @@ import FloatingCTA from './components/floating/FloatingCTA';
 import BackToTop from './components/floating/BackToTop';
 
 import HomePage from './pages/HomePage';
-import { NavigationProvider } from './contexts/NavigationContext';
-import { ROUTES } from './constants/navigation';
 import { ToastProvider } from './pages/admin/useToast';
 import AdminLayout from './components/admin/layout/AdminLayout';
 
 /* HomePage is eagerly imported because it is the landing page for every
    first-time visitor. Lazy-loading it would add a chunk-fetch hop in the
    critical render path. */
-const AboutPage    = lazy(() => import('./pages/AboutPage'));
-const ServicesPage = lazy(() => import('./pages/ServicesPage'));
-const MenusPage    = lazy(() => import('./pages/MenusPage'));
-const GalleryPage  = lazy(() => import('./pages/GalleryPage'));
-const ReviewsPage  = lazy(() => import('./pages/ReviewsPage'));
-const ContactPage  = lazy(() => import('./pages/ContactPage'));
+const AboutPage         = lazy(() => import('./pages/AboutPage'));
+const ServicesPage      = lazy(() => import('./pages/ServicesPage'));
+const MenusPage         = lazy(() => import('./pages/MenusPage'));
+const GalleryPage       = lazy(() => import('./pages/GalleryPage'));
+const ReviewsPage       = lazy(() => import('./pages/ReviewsPage'));
+const ContactPage       = lazy(() => import('./pages/ContactPage'));
 const ClientReviewsPage = lazy(() => import('./pages/ClientReviewsPage'));
 
-/* Admin pages — lazy-loaded like other pages */
-const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'));
-const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const AdminReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
-const AdminSendInvitationPage = lazy(() => import('./pages/admin/SendInvitationPage'));
-const AdminClientsPage = lazy(() => import('./pages/admin/ClientsPage'));
-const AdminEmailBuilderPage = lazy(() => import('./pages/admin/EmailBuilderPage'));
-const AdminQuotesPage = lazy(() => import('./pages/admin/QuotesPage'));
-const AdminSubscribersPage = lazy(() => import('./pages/admin/SubscribersPage'));
+/* Admin pages — lazy-loaded like the public ones. */
+const AdminLoginPage         = lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminDashboardPage     = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminReviewsPage       = lazy(() => import('./pages/admin/ReviewsPage'));
+const AdminSendInvitationPage= lazy(() => import('./pages/admin/SendInvitationPage'));
+const AdminClientsPage       = lazy(() => import('./pages/admin/ClientsPage'));
+const AdminEmailBuilderPage  = lazy(() => import('./pages/admin/EmailBuilderPage'));
+const AdminQuotesPage        = lazy(() => import('./pages/admin/QuotesPage'));
+const AdminSubscribersPage   = lazy(() => import('./pages/admin/SubscribersPage'));
 
 /**
- * Route id → page component. The single point of extension for adding a
- * new page (Open/Closed): one import + one row here, never a switch edit.
- *
- * @type {Object<string, React.ComponentType>}
- */
-const PAGE_REGISTRY = {
-  [ROUTES.HOME]:     HomePage,
-  [ROUTES.ABOUT]:    AboutPage,
-  [ROUTES.SERVICES]: ServicesPage,
-  [ROUTES.MENUS]:    MenusPage,
-  [ROUTES.GALLERY]:  GalleryPage,
-  [ROUTES.REVIEWS]:  ReviewsPage,
-  [ROUTES.CONTACT]:  ContactPage,
-  [ROUTES.FEEDBACK]: ClientReviewsPage,
-  
-  // Admin routes
-  'admin-login': AdminLoginPage,
-  'admin-dashboard': AdminDashboardPage,
-  'admin-reviews': AdminReviewsPage,
-  'admin-send-invitation': AdminSendInvitationPage,
-  'admin-clients': AdminClientsPage,
-  'admin-emails': AdminEmailBuilderPage,
-  'admin-quotes': AdminQuotesPage,
-  'admin-subscribers': AdminSubscribersPage,
-};
-
-/**
- * Suspense fallback rendered while a lazy page chunk is in flight.
- * Intentionally empty — the chunk is small and the wait is sub-200ms on
- * a normal connection. A spinner here would flash and feel slower than
- * just letting the next page paint when ready.
+ * Suspense fallback while a lazy chunk is in flight.
+ * Intentionally empty — chunks are small and the wait is sub-200ms on a
+ * normal connection. A spinner here would flash and feel slower than just
+ * letting the next page paint when ready.
  */
 const PageFallback = () => <div className="page-fallback" aria-hidden="true" />;
 
 /**
  * Decide whether to show the opening splash for this page load.
- *
- * Returns false when:
- *   - The user prefers reduced motion (skip the splash entirely; the
- *     existing CSS reduced-motion path also degrades the animation, but
- *     bypassing the wait gives them an instant page).
- *
- * The splash will show on every hard refresh (browser close/reopen) but
- * not on soft refreshes (F5, Ctrl+R) within the same browser session.
- * We use a window-scoped flag instead of sessionStorage so it only
- * persists during the current page lifecycle.
+ * Skips when prefers-reduced-motion is set or the splash already played
+ * in this window instance (i.e. soft refresh, in-tab navigation).
  */
 const shouldShowSplash = () => {
   try {
     if (typeof window === 'undefined') return false;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
-    
-    // Check if splash has been shown in this window instance
-    // This flag is cleared on hard refresh but persists on soft refresh
     if (window.__splashShown) return false;
-    
     return true;
   } catch {
     return true;
@@ -133,127 +93,109 @@ const shouldShowSplash = () => {
 };
 
 /**
- * Application root component.
+ * One-shot legacy hash → path migration. Runs only when the URL still
+ * carries an old `/#contact?t=abc` form, rewriting it to `/contact?t=abc`
+ * via `replaceState` (not `pushState`, so the back button isn't polluted).
  *
- * @returns {React.ReactElement}
+ * Mounted once at App root.
  */
-function App() {
-  /* Active route id. Honour the URL hash on first load so links like
-     `#admin-login` work directly (and the Footer's "Staff login" anchor
-     is a real shareable link). Falls back to HOME if the hash is
-     missing or doesn't resolve to a known route. */
-  const [currentPage, setCurrentPage] = useState(() => {
-    if (typeof window === 'undefined') return ROUTES.HOME;
-    const hash = window.location.hash.slice(1); // e.g. "feedback?t=abc" or "home"
-    const pageId = hash.split('?')[0];           // strip query string before lookup
-    if (pageId && PAGE_REGISTRY[pageId]) return pageId;
-    return ROUTES.HOME;
-  });
-
-  /* Opening-splash visibility. Lazy initial state — runs only on first
-     render — so returning visitors and reduced-motion users skip the
-     3 s wait entirely. */
-  const [showAnimation, setShowAnimation] = useState(shouldShowSplash);
-
-  /* Route loading state — only shows loader when lazy-loaded pages are
-     being fetched for the first time. Once cached, no loader appears. */
-  const [isRouteLoading, setIsRouteLoading] = useState(false);
-  
-  /* Track which pages have been loaded to avoid showing loader again */
-  const loadedPagesRef = useRef(new Set([ROUTES.HOME])); // Home is eagerly loaded
-
-  /* Admin authentication check — redirect to login if accessing admin pages
-     without valid token. Token is stored in localStorage with expiry. 
-     
-     Development bypass: Set localStorage.setItem('adminToken', 'dev') and 
-     localStorage.setItem('adminTokenExpiry', Date.now() + 86400000) in console
-     to skip login for 24 hours. */
-  useEffect(() => {
-    const isAdminPage = currentPage.startsWith('admin-');
-    const isLoginPage = currentPage === 'admin-login';
-    
-    if (isAdminPage && !isLoginPage) {
-      // Check if user is authenticated
-      const token = localStorage.getItem('adminToken');
-      const expiry = localStorage.getItem('adminTokenExpiry');
-      const isAuthenticated = token && expiry && Date.now() < parseInt(expiry);
-      
-      if (!isAuthenticated) {
-        // Clear loading state and redirect to login
-        setIsRouteLoading(false);
-        loadedPagesRef.current.add('admin-login'); // Mark login as loaded to avoid loader
-        setCurrentPage('admin-login');
-      }
-    }
-  }, [currentPage]);
-
-  /* Snap to top on every navigation so users never land mid-scroll inside a
-     page they just opened. Instant scroll (not smooth) is intentional — a
-     smooth scroll across an entire page-height feels slow on long content. */
-  useEffect(() => { window.scrollTo(0, 0); }, [currentPage]);
-
-  /* Keep the URL hash page-id in sync with the current page.
-     Crucially: preserve any existing query string (e.g. ?t=<token>)
-     so invitation links like /#feedback?t=abc survive navigation. */
+const useLegacyHashRedirect = () => {
+  const navigate = useRouterNavigate();
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const currentHash = window.location.hash.slice(1); // e.g. "feedback?t=abc"
-    const currentPageId = currentHash.split('?')[0];
-    const currentQuery = currentHash.includes('?') ? currentHash.slice(currentHash.indexOf('?')) : '';
+    const hash = window.location.hash || '';
+    if (!hash.startsWith('#')) return;
+    const stripped = hash.slice(1); // e.g. "feedback?t=abc" or "admin-login"
+    if (!stripped) return;
 
-    if (currentPageId !== currentPage) {
-      // Only update the page-id segment; keep the query string if we're
-      // staying on the same page, drop it when navigating away.
-      const newHash = currentPageId === currentPage
-        ? `#${currentPage}${currentQuery}`
-        : `#${currentPage}`;
-      window.history.replaceState(null, '', newHash);
-    }
-  }, [currentPage]);
+    const [idPart, queryPart = ''] = stripped.split('?');
+    const ID_TO_PATH = {
+      home: '/',
+      about: '/about',
+      services: '/services',
+      menus: '/menus',
+      gallery: '/gallery',
+      reviews: '/reviews',
+      contact: '/contact',
+      feedback: '/feedback',
+      'admin-login': '/admin/login',
+      'admin-dashboard': '/admin/dashboard',
+      'admin-reviews': '/admin/reviews',
+      'admin-send-invitation': '/admin/send-invitation',
+      'admin-clients': '/admin/clients',
+      'admin-emails': '/admin/emails',
+      'admin-quotes': '/admin/quotes',
+      'admin-subscribers': '/admin/subscribers',
+    };
+    const path = ID_TO_PATH[idPart];
+    if (!path) return;
 
-  /* Listen for browser-driven hash changes (back / forward / pasted URL). */
+    const search = queryPart ? `?${queryPart}` : '';
+    navigate({ pathname: path, search }, { replace: true });
+  }, [navigate]);
+};
+
+/**
+ * Cross-tab + intra-tab "auth-expired" handler. The api client dispatches
+ * `skc:auth-expired` on 401/403 from any admin endpoint; this listener
+ * bounces the user to the login screen so they don't sit on a stale UI.
+ * The matching `storage` listener picks up logouts in other tabs.
+ */
+const useAuthExpiryHandler = () => {
+  const navigate = useRouterNavigate();
   useEffect(() => {
-    const onHashChange = () => {
-      const hash = window.location.hash.slice(1); // e.g. "feedback?t=abc"
-      const pageId = hash.split('?')[0];           // strip query string
-      if (pageId && PAGE_REGISTRY[pageId] && pageId !== currentPage) {
-        setCurrentPage(pageId);
-      } else if (!pageId && currentPage !== ROUTES.HOME) {
-        setCurrentPage(ROUTES.HOME);
+    const onExpired = () => navigate('/admin/login', { replace: true });
+    const onStorage = (e) => {
+      if (e.key === 'adminToken' && !e.newValue) {
+        navigate('/admin/login', { replace: true });
       }
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, [currentPage]);
+    window.addEventListener('skc:auth-expired', onExpired);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('skc:auth-expired', onExpired);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [navigate]);
+};
 
-  /* Track route changes and show loader only for first-time page loads.
-     Once a page is loaded, it's cached by React.lazy and won't trigger
-     the loader again. */
+/**
+ * Admin auth gate. When the user lands on an admin path that isn't the
+ * login screen, verify a non-expired token is present in localStorage; if
+ * not, redirect to login. Mirrors the original behaviour from the
+ * hash-routed version.
+ */
+const useAdminAuthGate = (pathname) => {
+  const navigate = useRouterNavigate();
   useEffect(() => {
-    // Check if this page has been loaded before
-    if (!loadedPagesRef.current.has(currentPage)) {
-      // First time loading this page - show loader
-      setIsRouteLoading(true);
-      
-      // Mark page as loaded after component mounts
-      const timer = setTimeout(() => {
-        loadedPagesRef.current.add(currentPage);
-        setIsRouteLoading(false);
-      }, 300); // Increased delay to ensure component has mounted
-      
-      return () => clearTimeout(timer);
-    } else {
-      // Page already loaded, ensure loader is off
-      setIsRouteLoading(false);
-    }
-  }, [currentPage]);
+    const isAdmin = pathname.startsWith('/admin');
+    const isLogin = pathname === '/admin/login';
+    if (!isAdmin || isLogin) return;
 
-  /* Prefetch the most-likely-next pages during browser idle time so the
-     first navigation feels instant. We don't need them for the initial
-     paint, but starting their fetch in the background means the chunks
-     are already in the HTTP cache by the time the user clicks.
-     requestIdleCallback fires after the browser has finished critical
-     work; falls back to a setTimeout on Safari (which lacks the API). */
+    const token = localStorage.getItem('adminToken');
+    const expiry = localStorage.getItem('adminTokenExpiry');
+    const authed = token && expiry && Date.now() < parseInt(expiry, 10);
+    if (!authed) navigate('/admin/login', { replace: true });
+  }, [pathname, navigate]);
+};
+
+/**
+ * Snap to top + clear page-shell scroll on each navigation. Instant scroll
+ * (not smooth) is intentional — a smooth scroll across an entire
+ * page-height feels slow on long content.
+ */
+const useScrollToTopOnNav = (pathname) => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+};
+
+/**
+ * Prefetch the most-likely-next pages during browser idle time so the first
+ * navigation feels instant. requestIdleCallback fires after the browser has
+ * finished critical work; falls back to setTimeout on Safari (no API).
+ */
+const useIdlePrefetch = () => {
   useEffect(() => {
     const prefetch = () => {
       import('./pages/MenusPage');
@@ -268,110 +210,113 @@ function App() {
       else window.clearTimeout(id);
     };
   }, []);
+};
 
-  /* Memoised navigation value — the contract that NavigationContext exposes.
-     Identity must change only when `currentPage` actually changes; otherwise
-     every consumer of useNavigation re-renders on every App render. */
-  const navigation = useMemo(
-    () => ({ currentPage, navigate: setCurrentPage }),
-    [currentPage]
-  );
+/**
+ * Small abstraction so each Suspense + PageFallback boundary stays uniform.
+ */
+const Lazy = ({ children }) => (
+  <Suspense fallback={<PageFallback />}>{children}</Suspense>
+);
 
-  /* Defensive fallback to HomePage if a future bug ever sets currentPage to
-     an unregistered id. Silent recovery is acceptable here because routing
-     is internal — there is no user-typed URL to mistype. */
-  const PageComponent = PAGE_REGISTRY[currentPage] || HomePage;
-  const isAdminRoute = currentPage.startsWith('admin-');
-  const isAdminShellRoute = isAdminRoute && currentPage !== 'admin-login';
+function App() {
+  const { pathname } = useLocation();
+  const [showAnimation, setShowAnimation] = useState(shouldShowSplash);
 
-  /* When the splash finishes, mark the window instance so subsequent navigations
-     in this tab skip the splash. This flag is cleared on hard refresh but
-     persists during soft refreshes (F5, Ctrl+R). */
+  useLegacyHashRedirect();
+  useAuthExpiryHandler();
+  useAdminAuthGate(pathname);
+  useScrollToTopOnNav(pathname);
+  useIdlePrefetch();
+
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isAdminShellRoute = isAdminRoute && pathname !== '/admin/login';
+
   const handleSplashComplete = () => {
-    try {
-      window.__splashShown = true;
-    } catch {
-      /* Flag is best-effort, not critical. */
-    }
+    try { window.__splashShown = true; } catch { /* ignore */ }
     setShowAnimation(false);
   };
 
+  /* Public routes share the page-shell <main key={pathname}> entrance
+     animation. Admin routes that live inside AdminLayout share its sidebar
+     and topbar across navigations, so we don't remount that shell on every
+     route change — only its inner content remounts via the inner key. */
+  const publicRoutes = (
+    <main className="page-shell" key={pathname}>
+      <Lazy>
+        <Routes>
+          <Route path="/"         element={<HomePage />} />
+          <Route path="/about"    element={<AboutPage />} />
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/menus"    element={<MenusPage />} />
+          <Route path="/gallery"  element={<GalleryPage />} />
+          <Route path="/reviews"  element={<ReviewsPage />} />
+          <Route path="/contact"  element={<ContactPage />} />
+          <Route path="/feedback" element={<ClientReviewsPage />} />
+          {/* Admin login is full-bleed, no sidebar — rendered without
+              AdminLayout but still inside ToastProvider. */}
+          <Route
+            path="/admin/login"
+            element={
+              <ToastProvider>
+                <AdminLoginPage />
+              </ToastProvider>
+            }
+          />
+          {/* Anything we don't recognise on the public surface falls back
+              to the home page. Acceptable for a small marketing site;
+              swap for a real <NotFound /> component when needed. */}
+          <Route path="*" element={<HomePage />} />
+        </Routes>
+      </Lazy>
+    </main>
+  );
+
+  const adminRoutes = (
+    <ToastProvider>
+      <AdminLayout>
+        <Lazy>
+          <Routes>
+            <Route path="/admin/dashboard"        element={<AdminDashboardPage />} />
+            <Route path="/admin/reviews"          element={<AdminReviewsPage />} />
+            <Route path="/admin/send-invitation"  element={<AdminSendInvitationPage />} />
+            <Route path="/admin/clients"          element={<AdminClientsPage />} />
+            <Route path="/admin/emails"           element={<AdminEmailBuilderPage />} />
+            <Route path="/admin/quotes"           element={<AdminQuotesPage />} />
+            <Route path="/admin/subscribers"      element={<AdminSubscribersPage />} />
+            {/* Unknown /admin/* paths fall back to the dashboard. */}
+            <Route path="/admin/*" element={<AdminDashboardPage />} />
+          </Routes>
+        </Lazy>
+      </AdminLayout>
+    </ToastProvider>
+  );
+
   return (
-    <NavigationProvider value={navigation}>
-      <div className="App">
-        {/* Splash sits above everything else (z-index 9999 in CSS) and
-            unmounts when EntryAnimation calls onComplete. */}
-        {showAnimation && <EntryAnimation onComplete={handleSplashComplete} />}
+    <div className="App">
+      {showAnimation && <EntryAnimation onComplete={handleSplashComplete} />}
 
-        {/* Only show public site chrome (header, footer, FABs) for non-admin pages */}
-        {!isAdminRoute && (
-          <>
-            <ScrollProgress />
-            <Header />
-          </>
-        )}
+      {!isAdminRoute && (
+        <>
+          <ScrollProgress />
+          <Header />
+        </>
+      )}
 
-        {/* Route loader — appears during page transitions */}
-        <RouteLoader isLoading={isRouteLoading} />
+      <RouteLoader isLoading={false} />
 
-        {/*
-          Three render branches:
-          1. Admin shell pages — AdminLayout (sidebar + topbar) is the stable
-             root and stays mounted across admin route changes; the inner
-             content is keyed by route inside AdminLayout so it still fades
-             in. This is what gives the admin its persistent sidebar.
-          2. admin-login — full-bleed page with no admin chrome.
-          3. Public pages — keyed <main> as before, so the page-shell
-             fade-up entrance animation fires on every navigation.
-        */}
-        {isAdminShellRoute ? (
-          <ToastProvider>
-            <AdminLayout>
-              <Suspense fallback={<PageFallback />}>
-                <PageComponent />
-              </Suspense>
-            </AdminLayout>
-          </ToastProvider>
-        ) : isAdminRoute ? (
-          <main className="page-shell" key={currentPage}>
-            <ToastProvider>
-              <Suspense fallback={<PageFallback />}>
-                <PageComponent />
-              </Suspense>
-            </ToastProvider>
-          </main>
-        ) : (
-          <main className="page-shell" key={currentPage}>
-            <Suspense fallback={<PageFallback />}>
-              <PageComponent />
-            </Suspense>
-          </main>
-        )}
+      {isAdminShellRoute ? adminRoutes : publicRoutes}
 
-        {/* Only show public site chrome for non-admin pages */}
-        {!isAdminRoute && (
-          <>
-            <Footer />
-            <FloatingCTA />
-            <WhatsAppFAB />
-            <BackToTop />
-          </>
-        )}
-      </div>
-    </NavigationProvider>
+      {!isAdminRoute && (
+        <>
+          <Footer />
+          <FloatingCTA />
+          <WhatsAppFAB />
+          <BackToTop />
+        </>
+      )}
+    </div>
   );
 }
 
 export default App;
-
-/*
- * MIGRATION NOTE — to convert to URL-based routing:
- *   1. npm install react-router-dom
- *   2. Wrap <App> in <BrowserRouter> in src/index.js.
- *   3. Replace the PAGE_REGISTRY switch with <Routes>/<Route>.
- *   4. NavigationContext can be retained or replaced with `useNavigate()` —
- *      keeping the context preserves the contract and avoids touching every
- *      consumer.
- *   5. Configure CloudFront/S3 to rewrite all 404s to /index.html
- *      (otherwise refreshes on /menus etc. will 404).
- */

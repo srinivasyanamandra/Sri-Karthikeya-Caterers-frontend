@@ -1,15 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import PageHero from '../components/layout/PageHero';
-import reviewFilters from '../data/reviewFilters';
 import { publicApi } from '../services/api';
 
 /**
  * Public reviews page — fetches APPROVED + isPublic reviews from the
- * backend (`GET /api/reviews/public`). Stays paginated client-side over
- * the first page (24 rows) — good enough for a marketing page.
+ * backend (`GET /api/public/reviews/public`). The first 48 rows are
+ * rendered as a single, calm grid — no filter chips, on the principle
+ * that fewer controls feel more premium and let the testimonials
+ * themselves carry the page.
  */
 const ReviewsPage = () => {
-  const [activeFilter, setActiveFilter] = useState('all');
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,16 +49,6 @@ const ReviewsPage = () => {
     };
   }, []);
 
-  const filteredReviews = useMemo(
-    () =>
-      activeFilter === 'all'
-        ? reviews
-        : reviews.filter((r) =>
-            (r.event || '').toLowerCase().includes(activeFilter)
-          ),
-    [activeFilter, reviews]
-  );
-
   return (
     <div className="reviews-page">
       <PageHero
@@ -69,19 +59,6 @@ const ReviewsPage = () => {
 
       <section className="section section-alt">
         <div className="container">
-          <div className="reviews-filter">
-            {reviewFilters.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`filter-btn ${activeFilter === option.id ? 'active' : ''}`}
-                onClick={() => setActiveFilter(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
           {loading && (
             <p style={{ textAlign: 'center', padding: '2rem 0' }}>
               <i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i>{' '}
@@ -95,14 +72,14 @@ const ReviewsPage = () => {
             </p>
           )}
 
-          {!loading && !error && filteredReviews.length === 0 && (
+          {!loading && !error && reviews.length === 0 && (
             <p style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
               No reviews yet — be among the first to share your experience.
             </p>
           )}
 
           <div className="reviews-grid">
-            {filteredReviews.map((review) => (
+            {reviews.map((review) => (
               <article key={review.id || review.event + review.date} className="review-card">
                 <div className="review-header">
                   <div className="reviewer-info">

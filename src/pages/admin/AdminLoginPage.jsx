@@ -24,6 +24,11 @@ const AdminLoginPage = () => {
   const [message, setMessage] = useState('');
 
   const tokenInputRef = useRef(null);
+  /* The success → dashboard transition is delayed 600ms so the user can
+     register the success message. The timer must be cancelled if the
+     component unmounts in that window — otherwise React fires
+     setState/navigate against an unmounted tree. */
+  const redirectTimerRef = useRef(null);
 
   useEffect(() => {
     // unused now that token step is collapsed, but keep ref for parity
@@ -31,6 +36,10 @@ const AdminLoginPage = () => {
       tokenInputRef.current.focus();
     }
   }, [step]);
+
+  useEffect(() => () => {
+    if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -87,7 +96,11 @@ const AdminLoginPage = () => {
 
       setStep('success');
       setMessage('Login successful. Redirecting to dashboard…');
-      setTimeout(() => navigate('admin-dashboard'), 600);
+      if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = window.setTimeout(
+        () => navigate('admin-dashboard'),
+        600
+      );
     } catch (error) {
       const code = error?.code || '';
       const msg =

@@ -10,7 +10,41 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/admin/auth/login -X POST -H 'Content-Type: application/json' -d '{}' --max-time 5)",
       "Bash(/bin/bash -c 'TOKEN=\"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzcmluaXZhcy55YW5hbWFuZHJhMDRAZ21haWwuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzc3ODk3NDg1LCJleHAiOjE3Nzc5ODM4ODV9.FxfNvgGWNNBFCo21choNNJNIOD-iHTOl3uamUhPly5w\"; export TOKEN; export BASE=\"http://localhost:8080\"; /usr/bin/curl -s -o /tmp/r1.json -w \"POST /api/quotes -> %{http_code}\\\\n\" -X POST -H \"Content-Type: application/json\" -d \"{\\\\\"name\\\\\":\\\\\"Test User\\\\\",\\\\\"email\\\\\":\\\\\"qa.test@example.com\\\\\",\\\\\"phone\\\\\":\\\\\"+919999999999\\\\\",\\\\\"eventType\\\\\":\\\\\"Wedding\\\\\",\\\\\"eventDate\\\\\":\\\\\"2026-09-01\\\\\",\\\\\"guests\\\\\":150,\\\\\"venue\\\\\":\\\\\"Test Hall\\\\\",\\\\\"budget\\\\\":\\\\\"100000\\\\\",\\\\\"message\\\\\":\\\\\"automated test\\\\\"}\" \"$BASE/api/quotes\" --max-time 30; cat /tmp/r1.json | /usr/bin/head -c 400; echo')",
       "Bash(git -C \"/Users/pankajkumar/Desktop/untitled folder/Sri-Karthikeya-Caterers-frontend\" status --short)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Read(//Users/pankajkumar/Desktop/untitled folder 7.55.56 PM/**)",
+      "Bash(ls src/pages/admin/)",
+      "Bash(ls src/services/)",
+      "Bash(ls \"/Users/pankajkumar/Desktop/\" | head -40)",
+      "Read(//Users/pankajkumar/Desktop/**)",
+      "Bash(pwd)",
+      "Read(//tmp/**)",
+      "Bash(ln -sfn /Users/pankajkumar/Desktop/untitled*/Sri-Karthikeya-Caterers-frontend /tmp/skc)",
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(git config *)",
+      "Bash(security find-internet-password *)",
+      "Bash(brew install *)",
+      "Bash(npm install *)",
+      "Bash(curl -sS -o /dev/null -w \"HTTP %{http_code}  ·  total %{time_total}s\\\\n\" --max-time 90 https://skc-backend-5o4z.onrender.com/actuator/health)",
+      "Bash(shasum /tmp/skc/public/favicon.ico /tmp/skc/public/logo.png)",
+      "Bash(cp logo192.png logo192.png.react-default.bak)",
+      "Bash(cp logo512.png logo512.png.react-default.bak)",
+      "Bash(cp favicon.ico favicon.ico.react-default.bak)",
+      "Bash(sips -s format png -Z 192 logo.png --out logo192.png)",
+      "Bash(sips -s format png -Z 512 logo.png --out logo512.png)",
+      "Bash(sips -s format png -Z 64  logo.png --out favicon.png)"
+    ],
+    "additionalDirectories": [
+      "/tmp/skc/src/components/layout",
+      "/Users/pankajkumar/Desktop/untitled folder 7.55.56 PM/Sri-Karthikeya-Caterers-frontend/src/components/layout",
+      "/tmp/skc/src",
+      "/Users/pankajkumar/Desktop/untitled folder 7.55.56 PM/Sri-Karthikeya-Caterers-frontend/src",
+      "/tmp/skc",
+      "/Users/pankajkumar/Desktop/untitled folder 7.55.56 PM/Sri-Karthikeya-Caterers-frontend"
     ]
   }
 }

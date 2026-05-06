@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigation } from '../../../contexts/NavigationContext';
 import { CONTACT } from '../../../constants/contact';
-import { ROUTES } from '../../../constants/navigation';
+import { ROUTES, pathOf } from '../../../constants/navigation';
+import { tokenStore } from '../../../services/api';
 
 const NAV_GROUPS = [
   {
@@ -35,13 +36,10 @@ const AdminSidebar = ({ currentPage, collapsed, mobileOpen, onToggle, onCloseMob
   };
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminTokenExpiry');
-      localStorage.removeItem('adminEmail');
-    } catch {
-      /* ignore */
-    }
+    /* Use the single source of truth for token storage. Same call site as
+       AdminTopbar so future changes to tokenStore.clear() (e.g. revoking
+       on the server) propagate to every logout entry point. */
+    tokenStore.clear();
     navigate('admin-login');
   };
 
@@ -54,7 +52,7 @@ const AdminSidebar = ({ currentPage, collapsed, mobileOpen, onToggle, onCloseMob
     >
       <div className="admin-sidebar-header">
         <a
-          href="#admin-dashboard"
+          href={pathOf('admin-dashboard')}
           className="admin-sidebar-logo"
           onClick={(e) => {
             e.preventDefault();
@@ -101,7 +99,7 @@ const AdminSidebar = ({ currentPage, collapsed, mobileOpen, onToggle, onCloseMob
                     style={{ animationDelay: `${gi * 80 + i * 50 + 50}ms` }}
                   >
                     <a
-                      href={`#${item.id}`}
+                      href={pathOf(item.id)}
                       className={`admin-nav-link${active ? ' active' : ''}`}
                       title={collapsed ? item.label : undefined}
                       aria-current={active ? 'page' : undefined}
@@ -131,7 +129,7 @@ const AdminSidebar = ({ currentPage, collapsed, mobileOpen, onToggle, onCloseMob
 
       <div className="admin-sidebar-footer">
         <a
-          href={`#${ROUTES.HOME}`}
+          href={pathOf(ROUTES.HOME)}
           className="admin-sidebar-footer-link"
           title={collapsed ? 'View public site' : undefined}
           onClick={(e) => {

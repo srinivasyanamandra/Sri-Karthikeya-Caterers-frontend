@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import useScrolled from '../../hooks/useScrolled';
 import { useNavigation } from '../../contexts/NavigationContext';
-import { PRIMARY_NAV, ROUTES } from '../../constants/navigation';
+import { PRIMARY_NAV, ROUTES, pathOf } from '../../constants/navigation';
 import { CONTACT } from '../../constants/contact';
 
 const Header = () => {
@@ -59,7 +59,7 @@ const Header = () => {
       <header className={`header ${scrolled ? 'scrolled' : ''}`}>
         <div className="header-content">
           <a
-            href={`#${ROUTES.HOME}`}
+            href={pathOf(ROUTES.HOME)}
             className="logo"
             onClick={(e) => {
               e.preventDefault();
@@ -76,7 +76,7 @@ const Header = () => {
               return (
                 <a
                   key={item.id}
-                  href={`#${item.id}`}
+                  href={pathOf(item.id)}
                   className={isActive ? 'active' : ''}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(e) => {
@@ -95,7 +95,7 @@ const Header = () => {
               <i className="fas fa-phone" aria-hidden="true"></i> Call
             </a>
             <a
-              href={`#${ROUTES.CONTACT}`}
+              href={pathOf(ROUTES.CONTACT)}
               className="btn btn-primary"
               onClick={(e) => {
                 e.preventDefault();
@@ -133,7 +133,7 @@ const Header = () => {
       >
         <div className="mobile-nav-header">
           <a
-            href={`#${ROUTES.HOME}`}
+            href={pathOf(ROUTES.HOME)}
             className="logo"
             onClick={(e) => {
               e.preventDefault();
@@ -159,7 +159,7 @@ const Header = () => {
             return (
               <li key={item.id}>
                 <a
-                  href={`#${item.id}`}
+                  href={pathOf(item.id)}
                   className={isActive ? 'active' : ''}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(e) => {
@@ -177,7 +177,7 @@ const Header = () => {
 
         <div className="mobile-nav-cta">
           <a
-            href={`#${ROUTES.CONTACT}`}
+            href={pathOf(ROUTES.CONTACT)}
             className="btn btn-primary btn-lg"
             onClick={(e) => {
               e.preventDefault();

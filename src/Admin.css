@@ -1871,6 +1871,39 @@ select:focus {
   color: var(--color-primary);
 }
 
+/* Standalone sign-out button — pill shape on desktop with a label, icon-only
+   below the medium breakpoint to keep the topbar compact. */
+.admin-topbar-logout-btn {
+  width: auto;
+  border-radius: 999px;
+  padding: 0 14px 0 12px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.admin-topbar-logout-btn:hover {
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 50%, var(--color-border));
+  color: var(--color-error);
+}
+
+.admin-topbar-logout-label {
+  display: inline-block;
+}
+
+@media (max-width: 768px) {
+  .admin-topbar-logout-btn {
+    width: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .admin-topbar-logout-label {
+    display: none;
+  }
+}
+
 .admin-topbar-badge {
   position: absolute;
   top: -4px;

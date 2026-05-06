@@ -9,18 +9,28 @@ import { CONTACT } from '../constants/contact';
 import { publicApi } from '../services/api';
 
 /**
- * Read the `?t=<token>` query string from the URL hash.
- * The app uses hash-based routing so the query lives inside the hash:
- *   /#feedback?t=abc123
- * Called lazily so it always reads the current hash at mount time.
+ * Read the invitation token from the URL.
+ *
+ * Path-routed URLs put the token in the regular query string
+ * (`/feedback?t=abc123`). The legacy hash form (`/#feedback?t=abc123`)
+ * is migrated to the path form by App.js's `useLegacyHashRedirect` on
+ * first paint; we still fall back to reading the hash defensively in
+ * case this component renders before that migration effect fires.
  */
 const readTokenFromHash = () => {
   if (typeof window === 'undefined') return '';
+
+  // Preferred: regular query string after path-based routing.
+  const fromSearch = new URLSearchParams(window.location.search);
+  const direct = fromSearch.get('t') || fromSearch.get('token');
+  if (direct) return direct;
+
+  // Defensive: legacy hash-with-query form ("/#feedback?t=abc").
   const hash = window.location.hash || '';
   const q = hash.indexOf('?');
   if (q < 0) return '';
-  const params = new URLSearchParams(hash.slice(q + 1));
-  return params.get('t') || params.get('token') || '';
+  const fromHash = new URLSearchParams(hash.slice(q + 1));
+  return fromHash.get('t') || fromHash.get('token') || '';
 };
 
 const INITIAL_STATE = {

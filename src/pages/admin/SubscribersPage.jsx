@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
-import AdminPortal from '../../components/admin/shared/AdminPortal';
+import {
+  AdminButton,
+  AdminConfirmDialog,
+  AdminEmptyState,
+  AdminLoadingState,
+  AdminMetricCard,
+  AdminPortal,
+  AdminScheduleField,
+} from '../../components/admin/shared';
 import { CONTACT } from '../../constants/contact';
 import { admin as adminApi } from '../../services/api';
 import { useToast } from './useToast';
+import { browserTimezone, formatScheduleForDisplay } from '../../utils/datetime';
 
 /* ================================================================
    Mock data
@@ -520,10 +529,11 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
   const [byKind,            setByKind]            = useState({});
   const [perRecipient,      setPerRecipient]      = useState({});
 
-  /* Schedule */
+  /* Schedule — `schedule` is the canonical state shape produced by
+     AdminScheduleField: { date, time, iso, valid }. The `iso` is what
+     we put on the wire; the `date`/`time` round-trip the inputs. */
   const [scheduleMode, setScheduleMode] = useState('now');
-  const [sendDate,     setSendDate]     = useState('');
-  const [sendTime,     setSendTime]     = useState('09:00');
+  const [schedule, setSchedule] = useState({ date: '', time: '09:00', iso: null, valid: false });
 
   /* Wizard step */
   const [stepIndex, setStepIndex] = useState(0);
@@ -565,9 +575,9 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
   const canAdvance = useMemo(() => {
     if (step === 'recipients') return recipients.length > 0;
     if (step === 'templates')  return Boolean(defaultTemplateId);
-    if (step === 'schedule')   return scheduleMode === 'now' || (sendDate && sendTime);
+    if (step === 'schedule')   return scheduleMode === 'now' || schedule.valid;
     return true;
-  }, [step, recipients.length, defaultTemplateId, scheduleMode, sendDate, sendTime]);
+  }, [step, recipients.length, defaultTemplateId, scheduleMode, schedule.valid]);
 
   /* Render counts for the header summary */
   const { uniqueEmails, kindCounts, overrideCount } = useMemo(() => {
@@ -624,8 +634,22 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
       await adminApi.setCampaignTemplates(campaignId, tplBody);
 
       // 4) Send (immediate or scheduled)
-      const scheduleAt = scheduleMode === 'scheduled' ? `${sendDate}T${sendTime}:00` : null;
-      await adminApi.sendCampaign(campaignId, { scheduleAt });
+      // CRITICAL: scheduleAt MUST be a UTC ISO 8601 string with timezone
+      // suffix (`…Z` or `±HH:MM`). The backend deserialises it as
+      // java.time.Instant; a naive `yyyy-mm-ddTHH:mm:ss` either rejects or
+      // silently parses as UTC, producing the "scheduled emails never
+      // fire" symptom that affected production. AdminScheduleField always
+      // emits a proper ISO via `.iso`, computed from the local inputs.
+      if (scheduleMode === 'scheduled' && !schedule.valid) {
+        throw new Error('Pick a valid future date and time before scheduling.');
+      }
+      const scheduleAt = scheduleMode === 'scheduled' ? schedule.iso : null;
+      await adminApi.sendCampaign(campaignId, {
+        scheduleAt,
+        // Audit-only: the server stores this in system_logs so post-mortems
+        // can correlate dispatch lateness with the admin's local timezone.
+        timezone: scheduleMode === 'scheduled' ? browserTimezone() : undefined,
+      });
 
       setSending(false);
       setDone(true);
@@ -645,11 +669,11 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
               <div className="admin-success-icon">
                 <i className="fas fa-check-circle" aria-hidden="true" />
               </div>
-              <h3>{scheduleMode === 'now' ? 'Campaign sent' : 'Campaign scheduled'}</h3>
+              <h3>{scheduleMode === 'now' ? 'Campaign queued for sending' : 'Campaign scheduled'}</h3>
               <p>
                 {scheduleMode === 'now'
-                  ? `Your email is on its way to ${uniqueEmails.toLocaleString('en-IN')} recipient${uniqueEmails === 1 ? '' : 's'}.`
-                  : `Your email is scheduled for ${fmtDate(sendDate)} at ${sendTime}.`}
+                  ? `Your email is dispatching to ${uniqueEmails.toLocaleString('en-IN')} recipient${uniqueEmails === 1 ? '' : 's'}. Track progress on the Campaigns page.`
+                  : `Your email will go out ${formatScheduleForDisplay(schedule.iso)}. Cancel any time from the Campaigns page.`}
               </p>
             </div>
           </div>
@@ -819,16 +843,11 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
 
             {scheduleMode === 'scheduled' && (
               <div className="admin-surface mb-5">
-                <div className="form-row mb-0">
-                  <div className="form-group mb-0">
-                    <label htmlFor="sendDate">Date</label>
-                    <input id="sendDate" type="date" value={sendDate} onChange={(e) => setSendDate(e.target.value)} />
-                  </div>
-                  <div className="form-group mb-0">
-                    <label htmlFor="sendTime">Time</label>
-                    <input id="sendTime" type="time" value={sendTime} onChange={(e) => setSendTime(e.target.value)} />
-                  </div>
-                </div>
+                <AdminScheduleField
+                  value={{ date: schedule.date, time: schedule.time }}
+                  onChange={setSchedule}
+                  minLeadMinutes={1}
+                />
               </div>
             )}
 
@@ -866,7 +885,13 @@ const CampaignWizard = ({ initialSelected, onClose }) => {
                 </div>
                 <div className="row">
                   <dt>Send</dt>
-                  <dd>{scheduleMode === 'now' ? 'Immediately' : sendDate ? `${fmtDate(sendDate)} at ${sendTime}` : 'Pick a date'}</dd>
+                  <dd>
+                    {scheduleMode === 'now'
+                      ? 'Immediately'
+                      : schedule.iso
+                      ? formatScheduleForDisplay(schedule.iso)
+                      : 'Pick a date and time'}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -936,21 +961,28 @@ const SOURCE_BADGE = {
 const SubscribersPage = () => {
   const [subscribers, setSubscribers] = useState([]);
   const [clientsCount, setClientsCount] = useState(0);
+  const [campaignStats, setCampaignStats] = useState({ sent: 0, scheduled: 0 });
   const [loading,     setLoading]     = useState(true);
   const [loadError,   setLoadError]   = useState('');
   const [selected,    setSelected]    = useState([]); // ids of subscribers (for quick-launch wizard)
   const [showWizard,  setShowWizard]  = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirm, setConfirm] = useState(null); // { kind: 'delete' | 'unsubscribe' | 'bulkUnsub', id, email }
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const { toast } = useToast();
 
   const reload = useCallback(() => {
     setLoading(true);
-    // Load both subscribers and clients count
+    /* Load subscribers, total client count, and real campaign stats in
+       parallel. Campaign counts replace the previously hard-coded
+       "8 sent / 42% open rate" placeholders that were misleading admins. */
     return Promise.all([
       adminApi.listSubscribers({ page: 0, size: 200, sortField: 'createdAt', sortDir: 'desc' }),
-      adminApi.listClients({ page: 0, size: 1, sortField: 'createdAt', sortDir: 'desc' })
+      adminApi.listClients({ page: 0, size: 1, sortField: 'createdAt', sortDir: 'desc' }),
+      adminApi.listCampaigns({ page: 0, size: 1, status: 'sent' }).catch(() => ({ total: 0 })),
+      adminApi.listCampaigns({ page: 0, size: 1, status: 'queued' }).catch(() => ({ total: 0 })),
     ])
-      .then(([subscribersData, clientsData]) => {
+      .then(([subscribersData, clientsData, sentData, queuedData]) => {
         const items = Array.isArray(subscribersData?.items) ? subscribersData.items : [];
         setSubscribers(
           items.map((s) => ({
@@ -959,12 +991,15 @@ const SubscribersPage = () => {
             name: s.name || '',
             source: (s.source || 'website').toLowerCase(),
             subscribedAt: s.createdAt,
-            campaignsSent: 0,
             status: s.isActive ? 'active' : 'inactive',
             isActive: s.isActive,
           }))
         );
         setClientsCount(clientsData?.total || 0);
+        setCampaignStats({
+          sent: sentData?.total ?? 0,
+          scheduled: queuedData?.total ?? 0,
+        });
         setLoadError('');
       })
       .catch((err) => setLoadError(err?.message || 'Could not load data.'))
@@ -989,26 +1024,59 @@ const SubscribersPage = () => {
     if (sent) setSelected([]);
   };
 
-  const handleUnsubscribe = useCallback(async (id) => {
+  const performAction = useCallback(async () => {
+    if (!confirm) return;
+    setConfirmLoading(true);
     try {
-      await adminApi.unsubscribe(id);
-      toast.success('Subscriber unsubscribed.');
-      reload();
+      if (confirm.kind === 'unsubscribe') {
+        await adminApi.unsubscribe(confirm.id);
+        toast.success('Subscriber unsubscribed.');
+      } else if (confirm.kind === 'delete') {
+        await adminApi.deleteSubscriber(confirm.id);
+        toast.success('Subscriber deleted.');
+      } else if (confirm.kind === 'bulkUnsub') {
+        const ids = confirm.ids || [];
+        const results = await Promise.allSettled(ids.map((id) => adminApi.unsubscribe(id)));
+        const okCount = results.filter((r) => r.status === 'fulfilled').length;
+        const failed = results.length - okCount;
+        if (failed === 0) {
+          toast.success(`Unsubscribed ${okCount} subscriber${okCount === 1 ? '' : 's'}.`);
+        } else {
+          toast.warning(`${okCount} unsubscribed · ${failed} failed.`);
+        }
+        setSelected([]);
+      }
+      setConfirm(null);
+      await reload();
     } catch (err) {
-      toast.error(err?.message || 'Could not unsubscribe.');
+      toast.error(err?.message || 'Action failed.');
+    } finally {
+      setConfirmLoading(false);
     }
-  }, [reload, toast]);
+  }, [confirm, reload, toast]);
 
-  const handleDelete = useCallback(async (id, email) => {
-    if (!window.confirm(`Permanently delete subscriber ${email}?`)) return;
-    try {
-      await adminApi.deleteSubscriber(id);
-      toast.success('Subscriber deleted.');
-      reload();
-    } catch (err) {
-      toast.error(err?.message || 'Could not delete subscriber.');
-    }
-  }, [reload, toast]);
+  /* CSV export — lightweight, runs entirely in the browser. */
+  const exportCsv = useCallback(() => {
+    const headers = ['Email', 'Name', 'Source', 'Status', 'Subscribed'];
+    const rows = filtered.map((s) => [
+      s.email,
+      s.name || '',
+      s.source,
+      s.isActive ? 'active' : 'unsubscribed',
+      fmtDate(s.subscribedAt),
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} subscribers.`);
+  }, [filtered, toast]);
 
   const initialSelected = useMemo(
     () => subscribers.filter((s) => selected.includes(s.id)),
@@ -1017,12 +1085,12 @@ const SubscribersPage = () => {
 
   const stats = useMemo(
     () => ({
-      total:        subscribers.length,
-      selected:     selected.length,
-      campaigns:    8,
-      avgOpenRate:  42,
+      total:     subscribers.length,
+      active:    subscribers.filter((s) => s.isActive).length,
+      campaigns: campaignStats.sent,
+      scheduled: campaignStats.scheduled,
     }),
-    [subscribers.length, selected.length]
+    [subscribers, campaignStats]
   );
 
   return (
@@ -1031,39 +1099,58 @@ const SubscribersPage = () => {
         eyebrow="Email Campaigns"
         icon="fa-paper-plane"
         title="Email campaigns"
-        subtitle={`${stats.total.toLocaleString('en-IN')} subscribers · ${clientsCount} clients · ${stats.campaigns} campaigns sent · ${stats.avgOpenRate}% avg open rate`}
-        intro="Pick recipients from both your subscribers and clients. Assign one template, one per audience, or one per person — preview, then send."
+        subtitle={`${stats.total.toLocaleString('en-IN')} subscribers · ${stats.active.toLocaleString('en-IN')} active · ${clientsCount} clients reachable`}
+        intro="Manage your subscriber list and launch email campaigns from here. Pick recipients from subscribers and clients, assign templates, preview, and schedule or send."
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
-            <i className="fas fa-paper-plane" aria-hidden="true" /> New campaign
-            {selected.length > 0 && ` (${selected.length})`}
-          </button>
+          <AdminButton
+            variant="primary"
+            icon="fa-paper-plane"
+            onClick={() => setShowWizard(true)}
+          >
+            New campaign{selected.length > 0 ? ` (${selected.length})` : ''}
+          </AdminButton>
         }
       />
 
       <section className="section">
         <div className="container">
-          <div className="admin-kpi-grid">
-            <div className="admin-kpi">
-              <span className="admin-kpi-value">{stats.total.toLocaleString('en-IN')}</span>
-              <span className="admin-kpi-label">Subscribers</span>
-              <span className="admin-kpi-icon"><i className="fas fa-user-friends" /></span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-value">{clientsCount}</span>
-              <span className="admin-kpi-label">Clients reachable</span>
-              <span className="admin-kpi-icon"><i className="fas fa-users" /></span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-value">{stats.campaigns}</span>
-              <span className="admin-kpi-label">Campaigns sent</span>
-              <span className="admin-kpi-icon"><i className="fas fa-paper-plane" /></span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-value">{stats.avgOpenRate}%</span>
-              <span className="admin-kpi-label">Avg open rate</span>
-              <span className="admin-kpi-icon"><i className="fas fa-envelope-open" /></span>
-            </div>
+          <div className="admin-metric-grid">
+            <AdminMetricCard
+              label="Subscribers"
+              value={stats.total}
+              tone="primary"
+              icon="fa-user-friends"
+              hint={stats.active === stats.total ? 'all active' : `${stats.active} active`}
+              loading={loading}
+              delay={0}
+            />
+            <AdminMetricCard
+              label="Clients reachable"
+              value={clientsCount}
+              tone="info"
+              icon="fa-users"
+              hint="From client list"
+              loading={loading}
+              delay={80}
+            />
+            <AdminMetricCard
+              label="Campaigns sent"
+              value={stats.campaigns}
+              tone="success"
+              icon="fa-paper-plane"
+              hint="All time"
+              loading={loading}
+              delay={160}
+            />
+            <AdminMetricCard
+              label="Scheduled"
+              value={stats.scheduled}
+              tone={stats.scheduled > 0 ? 'warning' : 'neutral'}
+              icon="fa-clock"
+              hint={stats.scheduled > 0 ? 'Awaiting dispatch' : 'None scheduled'}
+              loading={loading}
+              delay={240}
+            />
           </div>
 
           {loadError && (
@@ -1089,30 +1176,68 @@ const SubscribersPage = () => {
               </label>
             </div>
             <div className="admin-toolbar-right">
-              <button type="button" className="btn btn-ghost"><i className="fas fa-download" /> Export CSV</button>
+              <AdminButton
+                variant="ghost"
+                icon="fa-download"
+                onClick={exportCsv}
+                disabled={filtered.length === 0}
+              >
+                Export CSV
+              </AdminButton>
             </div>
           </div>
 
           <div className="admin-table-container">
             <div className="admin-table-header">
-              <h3 className="admin-table-title">Subscribers</h3>
+              <h3 className="admin-table-title">
+                Subscribers
+                {filtered.length !== subscribers.length && (
+                  <span className="admin-cell-sub" style={{ marginLeft: 8, fontWeight: 400 }}>
+                    ({filtered.length} matching)
+                  </span>
+                )}
+              </h3>
               <div className="admin-table-actions">
                 {selected.length > 0 && (
-                  <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
-                    <i className="fas fa-paper-plane" /> Email selected ({selected.length})
-                  </button>
+                  <>
+                    <AdminButton
+                      variant="primary"
+                      icon="fa-paper-plane"
+                      onClick={() => setShowWizard(true)}
+                    >
+                      Email selected ({selected.length})
+                    </AdminButton>
+                    <AdminButton
+                      variant="ghost"
+                      icon="fa-ban"
+                      onClick={() =>
+                        setConfirm({
+                          kind: 'bulkUnsub',
+                          ids: selected.filter((id) =>
+                            subscribers.find((s) => s.id === id && s.isActive)
+                          ),
+                        })
+                      }
+                    >
+                      Unsubscribe selected
+                    </AdminButton>
+                  </>
                 )}
               </div>
             </div>
 
             {loading ? (
-              <div className="admin-loading"><div className="admin-spinner" /></div>
+              <AdminLoadingState variant="skeleton" rows={6} />
             ) : filtered.length === 0 ? (
-              <div className="admin-empty-state">
-                <div className="admin-empty-icon"><i className="fas fa-users" /></div>
-                <h3>No subscribers found</h3>
-                <p>{searchQuery ? 'Try adjusting your search.' : 'No subscribers yet — they appear once people sign up.'}</p>
-              </div>
+              <AdminEmptyState
+                icon="fa-user-friends"
+                title="No subscribers found"
+                description={
+                  searchQuery
+                    ? 'Try adjusting your search.'
+                    : 'No subscribers yet — they appear once people sign up.'
+                }
+              />
             ) : (
               <table className="admin-table">
                 <thead>
@@ -1160,22 +1285,23 @@ const SubscribersPage = () => {
                         </td>
                         <td>
                           {s.isActive && (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => handleUnsubscribe(s.id)}
+                            <AdminButton
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setConfirm({ kind: 'unsubscribe', id: s.id, email: s.email })
+                              }
                             >
                               Unsubscribe
-                            </button>
+                            </AdminButton>
                           )}
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--color-error)' }}
-                            onClick={() => handleDelete(s.id, s.email)}
-                          >
-                            <i className="fas fa-trash" aria-hidden="true" />
-                          </button>
+                          <AdminButton
+                            variant="ghost"
+                            size="sm"
+                            icon="fa-trash"
+                            ariaLabel={`Delete ${s.email}`}
+                            onClick={() => setConfirm({ kind: 'delete', id: s.id, email: s.email })}
+                          />
                         </td>
                       </tr>
                     );
@@ -1193,6 +1319,37 @@ const SubscribersPage = () => {
           onClose={handleCloseWizard}
         />
       )}
+
+      <AdminConfirmDialog
+        open={!!confirm}
+        title={
+          confirm?.kind === 'delete'
+            ? 'Delete subscriber?'
+            : confirm?.kind === 'bulkUnsub'
+            ? 'Unsubscribe selected?'
+            : 'Unsubscribe this subscriber?'
+        }
+        description={
+          confirm?.kind === 'delete'
+            ? `${confirm?.email} will be permanently removed. This cannot be undone.`
+            : confirm?.kind === 'bulkUnsub'
+            ? `${(confirm?.ids || []).length} subscriber${
+                (confirm?.ids || []).length === 1 ? '' : 's'
+              } will stop receiving campaign emails. They can re-subscribe via the website.`
+            : `${confirm?.email} will stop receiving campaign emails. They can re-subscribe via the website.`
+        }
+        confirmLabel={
+          confirm?.kind === 'delete'
+            ? 'Delete subscriber'
+            : confirm?.kind === 'bulkUnsub'
+            ? `Unsubscribe ${(confirm?.ids || []).length}`
+            : 'Unsubscribe'
+        }
+        tone={confirm?.kind === 'delete' ? 'danger' : 'primary'}
+        loading={confirmLoading}
+        onConfirm={performAction}
+        onCancel={() => !confirmLoading && setConfirm(null)}
+      />
     </>
   );
 };

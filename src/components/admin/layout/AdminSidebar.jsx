@@ -20,9 +20,10 @@ const NAV_GROUPS = [
   {
     label: 'Marketing',
     items: [
+      { id: 'admin-campaigns', label: 'Campaigns', icon: 'fa-bullhorn' },
+      { id: 'admin-subscribers', label: 'Subscribers', icon: 'fa-user-friends' },
       { id: 'admin-send-invitation', label: 'Send Invitation', icon: 'fa-paper-plane' },
       { id: 'admin-emails', label: 'Email Builder', icon: 'fa-envelope' },
-      { id: 'admin-subscribers', label: 'Subscribers', icon: 'fa-user-friends' },
     ],
   },
 ];

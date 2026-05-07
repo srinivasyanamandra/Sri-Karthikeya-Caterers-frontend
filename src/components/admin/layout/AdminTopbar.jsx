@@ -11,6 +11,7 @@ const PAGE_META = {
   'admin-send-invitation': { title: 'Send Invitation', icon: 'fa-paper-plane' },
   'admin-emails': { title: 'Email Builder', icon: 'fa-envelope' },
   'admin-subscribers': { title: 'Subscribers', icon: 'fa-user-friends' },
+  'admin-campaigns': { title: 'Campaigns', icon: 'fa-bullhorn' },
 };
 
 /* Notifications feature is not yet wired to the backend — we surface an

@@ -25,6 +25,7 @@ export const ROUTES = {
   ADMIN_EMAILS: 'admin-emails',
   ADMIN_QUOTES: 'admin-quotes',
   ADMIN_SUBSCRIBERS: 'admin-subscribers',
+  ADMIN_CAMPAIGNS: 'admin-campaigns',
 };
 
 /**
@@ -50,6 +51,7 @@ const ID_TO_PATH = {
   'admin-emails': '/admin/emails',
   'admin-quotes': '/admin/quotes',
   'admin-subscribers': '/admin/subscribers',
+  'admin-campaigns': '/admin/campaigns',
 };
 
 const PATH_TO_ID = Object.entries(ID_TO_PATH).reduce((acc, [id, path]) => {

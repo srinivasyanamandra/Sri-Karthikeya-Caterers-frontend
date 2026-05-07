@@ -67,6 +67,7 @@ const AdminClientsPage       = lazy(() => import('./pages/admin/ClientsPage'));
 const AdminEmailBuilderPage  = lazy(() => import('./pages/admin/EmailBuilderPage'));
 const AdminQuotesPage        = lazy(() => import('./pages/admin/QuotesPage'));
 const AdminSubscribersPage   = lazy(() => import('./pages/admin/SubscribersPage'));
+const AdminCampaignsPage     = lazy(() => import('./pages/admin/CampaignsPage'));
 
 /**
  * Suspense fallback while a lazy chunk is in flight.
@@ -126,6 +127,7 @@ const useLegacyHashRedirect = () => {
       'admin-emails': '/admin/emails',
       'admin-quotes': '/admin/quotes',
       'admin-subscribers': '/admin/subscribers',
+      'admin-campaigns': '/admin/campaigns',
     };
     const path = ID_TO_PATH[idPart];
     if (!path) return;
@@ -284,6 +286,7 @@ function App() {
             <Route path="/admin/emails"           element={<AdminEmailBuilderPage />} />
             <Route path="/admin/quotes"           element={<AdminQuotesPage />} />
             <Route path="/admin/subscribers"      element={<AdminSubscribersPage />} />
+            <Route path="/admin/campaigns"        element={<AdminCampaignsPage />} />
             {/* Unknown /admin/* paths fall back to the dashboard. */}
             <Route path="/admin/*" element={<AdminDashboardPage />} />
           </Routes>

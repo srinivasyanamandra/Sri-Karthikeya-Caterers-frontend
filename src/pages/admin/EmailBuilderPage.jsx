@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
+import { AdminConfirmDialog } from '../../components/admin/shared';
 import { CONTACT } from '../../constants/contact';
 import { admin as adminApi, tokenStore } from '../../services/api';
 import { validateEmail } from '../../utils/validation';
@@ -800,14 +801,30 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this template? This cannot be undone.')) return;
+  /* Soft-state for the delete confirmation dialog. Using a stateful
+     dialog (rather than window.confirm) means the modal is themed,
+     focus-trapped, and dismissible with ESC — and the action button can
+     show a loading spinner while the API call is in flight. */
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = (id) => {
+    const tpl = templates.find((t) => t.id === id);
+    setDeleteTarget({ id, name: tpl?.name || 'this template' });
+  };
+
+  const performDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await adminApi.deleteTemplate(id);
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      await adminApi.deleteTemplate(deleteTarget.id);
+      setTemplates((prev) => prev.filter((t) => t.id !== deleteTarget.id));
       toast.success('Template deleted.');
+      setDeleteTarget(null);
     } catch (err) {
       toast.error(err?.message || 'Could not delete template.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1384,6 +1401,22 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;color:#ebe4
           </div>
         </div>
       </section>
+
+      <AdminConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this template?"
+        description={
+          deleteTarget
+            ? `"${deleteTarget.name}" will be removed permanently. Campaigns that already used it remain intact, but you cannot send new campaigns from this template after deletion.`
+            : ''
+        }
+        confirmLabel="Delete template"
+        cancelLabel="Keep it"
+        tone="danger"
+        loading={deleting}
+        onConfirm={performDelete}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+      />
     </>
   );
 };

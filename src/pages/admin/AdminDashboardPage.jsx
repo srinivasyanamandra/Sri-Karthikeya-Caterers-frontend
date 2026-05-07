@@ -15,8 +15,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigation } from '../../contexts/NavigationContext';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
-import { useAnimatedCounter } from './adminHooks';
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminLoadingState,
+  AdminMetricCard,
+  AdminStatusPill,
+} from '../../components/admin/shared';
+/* useAnimatedCounter is consumed inside AdminMetricCard now — no direct
+   imports here after the dashboard switched from AnimatedStatCard. */
 import { admin as adminApi } from '../../services/api';
+import { formatRelative, formatScheduleForDisplay } from '../../utils/datetime';
 
 /* ─── Constants ───────────────────────────────────────────── */
 
@@ -33,45 +42,17 @@ const TYPE_ICON = {
   client: { icon: 'fa-user', color: '#6366f1' },
 };
 
-const INITIAL_ACTIVITY = [
-  { id: 1, type: 'review', message: 'New review submitted by Rajesh Kumar', time: '2 hours ago', status: 'pending', page: 'admin-reviews', read: false },
-  { id: 2, type: 'quote', message: 'Quote request from Priya Sharma — Wedding, 500 guests', time: '5 hours ago', status: 'pending', page: 'admin-quotes', read: false },
-  { id: 3, type: 'email', message: 'Monthly newsletter delivered to 1,834 subscribers', time: '1 day ago', status: 'success', page: 'admin-subscribers', read: true },
-  { id: 4, type: 'review', message: 'Review approved and featured on the homepage', time: '2 days ago', status: 'success', page: 'admin-reviews', read: true },
-  { id: 5, type: 'client', message: 'New client Lakshmi Iyer added to the database', time: '3 days ago', status: 'info', page: 'admin-clients', read: true },
-];
+/* Activity is sourced exclusively from the backend's /api/admin/dashboard
+   `recentActivity` array. We deliberately start with an empty list so the
+   dashboard never displays fabricated rows during the initial load — the
+   skeleton/empty-state handles the "no data yet" case honestly. */
+const INITIAL_ACTIVITY = [];
 
 /* ─── Sub-components ──────────────────────────────────────── */
 
-/**
- * AnimatedStatCard — counts up from 0 to value on mount
- */
-function AnimatedStatCard({ value, label, change, positive, delay = 0 }) {
-  const animated = useAnimatedCounter(value, 1100, delay);
-
-  const formatted = useMemo(
-    () =>
-      animated.toLocaleString('en-IN', {
-        maximumFractionDigits: 0,
-      }),
-    [animated]
-  );
-
-  return (
-    <div className="admin-stat-card" style={{ animationDelay: `${delay}ms` }}>
-      <span className="admin-stat-value" aria-live="polite" aria-label={`${value} ${label}`}>
-        {formatted}
-      </span>
-      <span className="admin-stat-label">{label}</span>
-      {change && (
-        <span className={`admin-stat-change${positive ? ' positive' : ''}`}>
-          {positive && <i className="fas fa-arrow-up" aria-hidden="true" />}
-          {change}
-        </span>
-      )}
-    </div>
-  );
-}
+/* The bespoke AnimatedStatCard was retired during the admin UX uplift —
+   KPI tiles now use AdminMetricCard from the shared primitives so
+   Dashboard / Subscribers / Campaigns share one visual language. */
 
 /**
  * LiveClock — updates every second
@@ -144,15 +125,39 @@ const AdminDashboardPage = () => {
     emailsDeliveredThisMonth: 0,
   });
   const [activity, setActivity] = useState(INITIAL_ACTIVITY);
+  const [scheduledCampaigns, setScheduledCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    adminApi
-      .dashboard()
-      .then((data) => {
+    Promise.all([
+      adminApi.dashboard(),
+      /* Surface up to 5 in-flight campaigns (queued or sending). The
+         dashboard "Upcoming dispatch" widget uses this so admins see at a
+         glance what's about to fire — and can click straight through to
+         cancel if something looks wrong. */
+      adminApi
+        .listCampaigns({
+          status: 'queued',
+          page: 0,
+          size: 5,
+          sortField: 'scheduledAt',
+          sortDir: 'asc',
+        })
+        .catch(() => ({ items: [] })),
+      adminApi
+        .listCampaigns({
+          status: 'sending',
+          page: 0,
+          size: 5,
+          sortField: 'startedAt',
+          sortDir: 'desc',
+        })
+        .catch(() => ({ items: [] })),
+    ])
+      .then(([data, queued, sending]) => {
         if (cancelled) return;
         const t = data?.totals || {};
         setStats({
@@ -162,6 +167,10 @@ const AdminDashboardPage = () => {
           activeSubscribers: t.subscribersActive ?? 0,
         });
         setTrends(data?.trends || {});
+
+        const queuedItems = Array.isArray(queued?.items) ? queued.items : [];
+        const sendingItems = Array.isArray(sending?.items) ? sending.items : [];
+        setScheduledCampaigns([...sendingItems, ...queuedItems].slice(0, 5));
 
         const apiActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
         if (apiActivity.length > 0) {
@@ -230,7 +239,7 @@ const AdminDashboardPage = () => {
         description: 'Compose a branded email and send to selected clients or subscribers.',
         action: 'New campaign',
         badge: null,
-        onClick: () => navigate('admin-subscribers'),
+        onClick: () => navigate('admin-campaigns'),
       },
       {
         icon: 'fa-user-plus',
@@ -251,13 +260,17 @@ const AdminDashboardPage = () => {
       {
         value: stats.totalClients,
         label: 'Total Clients',
-        change: trends.newClientsThisMonth ? `+${trends.newClientsThisMonth} this month` : '—',
+        icon: 'fa-users',
+        tone: 'primary',
+        change: trends.newClientsThisMonth ? `+${trends.newClientsThisMonth} this month` : null,
         positive: (trends.newClientsThisMonth || 0) > 0,
         delay: 50,
       },
       {
         value: stats.pendingQuotes,
         label: 'Pending Quotes',
+        icon: 'fa-file-alt',
+        tone: stats.pendingQuotes > 0 ? 'warning' : 'success',
         change: stats.pendingQuotes > 0 ? 'Requires attention' : 'All caught up',
         positive: false,
         delay: 120,
@@ -265,6 +278,8 @@ const AdminDashboardPage = () => {
       {
         value: stats.pendingReviews,
         label: 'Pending Reviews',
+        icon: 'fa-star',
+        tone: stats.pendingReviews > 0 ? 'warning' : 'success',
         change: stats.pendingReviews > 0 ? 'Awaiting moderation' : 'All caught up',
         positive: false,
         delay: 190,
@@ -272,9 +287,11 @@ const AdminDashboardPage = () => {
       {
         value: stats.activeSubscribers,
         label: 'Active Subscribers',
+        icon: 'fa-user-friends',
+        tone: 'info',
         change: trends.emailsDeliveredThisMonth
           ? `${trends.emailsDeliveredThisMonth} emails sent (mtd)`
-          : '—',
+          : null,
         positive: true,
         delay: 260,
       },
@@ -305,9 +322,19 @@ const AdminDashboardPage = () => {
               <i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> Loading live stats…
             </p>
           )}
-          <div className="admin-stats-grid">
+          <div className="admin-metric-grid">
             {kpiCards.map((card) => (
-              <AnimatedStatCard key={card.label} {...card} />
+              <AdminMetricCard
+                key={card.label}
+                label={card.label}
+                value={card.value}
+                tone={card.tone || 'primary'}
+                icon={card.icon}
+                delta={card.change}
+                deltaTone={card.positive ? 'positive' : 'neutral'}
+                delay={card.delay}
+                loading={loading}
+              />
             ))}
           </div>
         </div>
@@ -346,8 +373,123 @@ const AdminDashboardPage = () => {
         </div>
       </section>
 
-      {/* ── Activity log ── */}
+      {/* ── Upcoming dispatch ── */}
       <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <span className="eyebrow">Email queue</span>
+            <h2 className="section-title">Upcoming dispatch</h2>
+          </div>
+
+          <div className="admin-table-container">
+            <div className="admin-table-header">
+              <h3 className="admin-table-title">
+                Scheduled & in-flight campaigns
+              </h3>
+              <div className="admin-table-actions">
+                <AdminButton
+                  variant="ghost"
+                  icon="fa-arrow-right"
+                  iconPosition="right"
+                  onClick={() => navigate('admin-campaigns')}
+                >
+                  All campaigns
+                </AdminButton>
+              </div>
+            </div>
+
+            {loading ? (
+              <AdminLoadingState variant="skeleton" rows={3} />
+            ) : scheduledCampaigns.length === 0 ? (
+              <AdminEmptyState
+                icon="fa-clock"
+                title="No campaigns in the queue"
+                description="Scheduled and in-flight campaigns appear here. Launch a new one from the Campaigns page."
+                actionIcon="fa-bullhorn"
+                actionLabel="New campaign"
+                onAction={() => navigate('admin-campaigns')}
+              />
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                    <th>Recipients</th>
+                    <th>When</th>
+                    <th className="actions">Manage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduledCampaigns.map((c) => {
+                    const status = (c.status || '').toLowerCase();
+                    const total = c.totalRecipients || 0;
+                    const sent = c.sentCount || 0;
+                    return (
+                      <tr
+                        key={c.id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate('admin-campaigns')}
+                      >
+                        <td>
+                          <div className="admin-cell-title">{c.name}</div>
+                          <div className="admin-cell-sub">
+                            {sent.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')} sent
+                          </div>
+                        </td>
+                        <td>
+                          <AdminStatusPill status={status} />
+                        </td>
+                        <td>
+                          <strong>{total.toLocaleString('en-IN')}</strong>
+                        </td>
+                        <td>
+                          {status === 'queued' && c.scheduledAt ? (
+                            <>
+                              <div className="admin-cell-strong">
+                                {formatScheduleForDisplay(c.scheduledAt)}
+                              </div>
+                              <div className="admin-cell-sub">
+                                {formatRelative(c.scheduledAt)}
+                              </div>
+                            </>
+                          ) : status === 'sending' && c.startedAt ? (
+                            <>
+                              <div className="admin-cell-strong">Sending now</div>
+                              <div className="admin-cell-sub">
+                                started {formatRelative(c.startedAt)}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="admin-cell-sub">—</span>
+                          )}
+                        </td>
+                        <td className="actions">
+                          <AdminButton
+                            variant="ghost"
+                            size="sm"
+                            icon="fa-arrow-right"
+                            iconPosition="right"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate('admin-campaigns');
+                            }}
+                          >
+                            Open
+                          </AdminButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Activity log ── */}
+      <section className="section section-alt">
         <div className="container">
           <div className="section-header">
             <span className="eyebrow">Activity log</span>
@@ -359,143 +501,103 @@ const AdminDashboardPage = () => {
               <h3 className="admin-table-title">
                 Latest updates
                 {unreadCount > 0 && (
-                  <span
-                    style={{
-                      marginLeft: 10,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      background: 'var(--color-error)',
-                      color: 'white',
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                    aria-label={`${unreadCount} unread`}
-                  >
+                  <span className="admin-unread-pip" aria-label={`${unreadCount} unread`}>
                     {unreadCount}
                   </span>
                 )}
               </h3>
               <div className="admin-table-actions">
                 {unreadCount > 0 && (
-                  <button type="button" className="btn btn-ghost" onClick={markAllRead}>
-                    <i className="fas fa-check-double" aria-hidden="true" /> Mark all read
-                  </button>
+                  <AdminButton
+                    variant="ghost"
+                    icon="fa-check-double"
+                    onClick={markAllRead}
+                  >
+                    Mark all read
+                  </AdminButton>
                 )}
-                <button type="button" className="btn btn-ghost">
-                  <i className="fas fa-download" aria-hidden="true" /> Export
-                </button>
               </div>
             </div>
 
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Activity</th>
-                  <th>Time</th>
-                  <th>Status</th>
-                  <th className="actions">Go to</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activity.map((item) => {
-                  const typeMeta = TYPE_ICON[item.type] || TYPE_ICON.review;
-                  const statusMeta = STATUS_META[item.status] || STATUS_META.pending;
-                  return (
-                    <tr
-                      key={item.id}
-                      style={{
-                        cursor: 'pointer',
-                        background: !item.read
-                          ? 'rgba(201,136,47,0.04)'
-                          : undefined,
-                        borderLeft: !item.read
-                          ? '2px solid var(--color-accent)'
-                          : '2px solid transparent',
-                      }}
-                      onClick={() => handleActivityNav(item)}
-                      onKeyDown={(e) =>
-                        (e.key === 'Enter' || e.key === ' ') &&
-                        handleActivityNav(item)
-                      }
-                      tabIndex={0}
-                      role="row"
-                      aria-label={`${item.message} — ${item.time}`}
-                    >
-                      <td>
-                        <div className="flex-row" style={{ gap: 14 }}>
-                          <span
-                            className="admin-notification-icon"
-                            style={{ color: typeMeta.color }}
-                            aria-hidden="true"
-                          >
-                            <i className={`fas ${typeMeta.icon}`} />
+            {loading && activity.length === 0 ? (
+              <AdminLoadingState variant="skeleton" rows={4} />
+            ) : activity.length === 0 ? (
+              <AdminEmptyState
+                icon="fa-clock-rotate-left"
+                title="No recent activity"
+                description="Reviews, quotes, campaigns, and other admin events will surface here as they happen."
+              />
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Activity</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                    <th className="actions">Go to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity.map((item) => {
+                    const typeMeta = TYPE_ICON[item.type] || TYPE_ICON.review;
+                    const statusMeta = STATUS_META[item.status] || STATUS_META.pending;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={item.read ? '' : 'admin-row-unread'}
+                        onClick={() => handleActivityNav(item)}
+                        onKeyDown={(e) =>
+                          (e.key === 'Enter' || e.key === ' ') &&
+                          handleActivityNav(item)
+                        }
+                        tabIndex={0}
+                        role="row"
+                        aria-label={`${item.message} — ${item.time}`}
+                      >
+                        <td>
+                          <div className="flex-row" style={{ gap: 14 }}>
+                            <span
+                              className="admin-notification-icon"
+                              style={{ color: typeMeta.color }}
+                              aria-hidden="true"
+                            >
+                              <i className={`fas ${typeMeta.icon}`} />
+                            </span>
+                            <span style={{ fontWeight: item.read ? 400 : 600 }}>
+                              {item.message}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="admin-cell-sub">{item.time}</td>
+                        <td>
+                          <span className={`status-badge ${statusMeta.cls}`}>
+                            <i className={`fas ${statusMeta.icon}`} aria-hidden="true" />
+                            {statusMeta.label}
                           </span>
-                          <span
-                            style={{
-                              fontWeight: !item.read ? 600 : 400,
-                              color: !item.read
-                                ? 'var(--text-primary)'
-                                : undefined,
+                        </td>
+                        <td className="actions">
+                          <AdminButton
+                            variant="ghost"
+                            size="sm"
+                            icon="fa-arrow-right"
+                            iconPosition="right"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleActivityNav(item);
                             }}
                           >
-                            {item.message}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="admin-cell-sub">{item.time}</td>
-                      <td>
-                        <span className={`status-badge ${statusMeta.cls}`}>
-                          <i className={`fas ${statusMeta.icon}`} aria-hidden="true" />
-                          {statusMeta.label}
-                        </span>
-                      </td>
-                      <td className="actions">
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          style={{ padding: '6px 14px', fontSize: 12 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleActivityNav(item);
-                          }}
-                          aria-label={`Go to ${item.page.replace('admin-', '')}`}
-                        >
-                          View{' '}
-                          <i
-                            className="fas fa-arrow-right"
-                            aria-hidden="true"
-                            style={{ fontSize: 10 }}
-                          />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <div className="admin-pagination">
-              <div className="admin-pagination-info">
-                Showing {activity.length} of 247 activities
-              </div>
-              <div className="admin-pagination-controls">
-                <button type="button" className="admin-pagination-btn" disabled aria-label="Previous page">
-                  <i className="fas fa-chevron-left" aria-hidden="true" />
-                </button>
-                <button type="button" className="admin-pagination-btn active" aria-current="page">
-                  1
-                </button>
-                <button type="button" className="admin-pagination-btn" aria-label="Page 2">2</button>
-                <button type="button" className="admin-pagination-btn" aria-label="Page 3">3</button>
-                <button type="button" className="admin-pagination-btn" aria-label="Next page">
-                  <i className="fas fa-chevron-right" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
+                            View
+                          </AdminButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            {/* The previous "Showing 5 of 247" pagination was hard-coded
+                and the buttons were no-ops. Drop it entirely until the
+                backend exposes a real activity endpoint with paging. */}
           </div>
         </div>
       </section>

@@ -1,10 +1,12 @@
 /**
  * API client for the Sri Karthikeya Caterers backend.
  *
- * - Reads base URL from REACT_APP_API_URL (defaults to the deployed Render
- *   instance at https://skc-backend-5o4z.onrender.com). Override with a
- *   `.env.local` containing REACT_APP_API_URL=http://localhost:8080 to run
- *   the frontend against a local Spring Boot backend.
+ * SINGLE SOURCE OF TRUTH FOR API URL:
+ * - Reads base URL from REACT_APP_API_URL environment variable (NO hardcoded fallback)
+ * - Local development: Uses http://localhost:8080 (from .env)
+ * - Production: Uses https://skc-backend-5o4z.onrender.com (from .env.production)
+ * - Override locally: Create .env.local with REACT_APP_API_URL=<your-url>
+ *
  * - Attaches Authorization: Bearer <jwt> on admin requests
  * - Normalizes the backend's `{error, message, fields, traceId}` envelope
  *   into a thrown ApiError so callers can render `err.message` / `err.fields`
@@ -12,8 +14,13 @@
  *   the navigation layer can redirect to /#admin-login
  */
 
-const API_URL =
-  (process.env.REACT_APP_API_URL || 'https://skc-backend-5o4z.onrender.com').replace(/\/+$/, '');
+// SINGLE SOURCE OF TRUTH - NO HARDCODED FALLBACK
+const API_URL = process.env.REACT_APP_API_URL?.replace(/\/+$/, '');
+
+if (!API_URL) {
+  console.error('❌ REACT_APP_API_URL is not set! Check your .env file.');
+  throw new Error('API URL configuration is missing. Please set REACT_APP_API_URL in your .env file.');
+}
 
 const TOKEN_KEY = 'adminToken';
 const TOKEN_EXPIRY_KEY = 'adminTokenExpiry';
@@ -220,8 +227,129 @@ export const admin = {
   listClients: (params) =>
     get('/api/admin/clients', { auth: true, params }),
   getClient: (id) => get(`/api/admin/clients/${id}`, { auth: true }),
+  createClient: (payload) =>
+    post('/api/admin/clients', payload, { auth: true }),
   updateClient: (id, payload) =>
     put(`/api/admin/clients/${id}`, payload, { auth: true }),
+  touchClient: (id) =>
+    post(`/api/admin/clients/${id}/touch`, null, { auth: true }),
+
+  /* clients → notes (CRM timeline) */
+  addClientNote: (id, payload) =>
+    post(`/api/admin/clients/${id}/notes`, payload, { auth: true }),
+  updateClientNote: (id, noteId, payload) =>
+    put(`/api/admin/clients/${id}/notes/${noteId}`, payload, { auth: true }),
+  deleteClientNote: (id, noteId) =>
+    del(`/api/admin/clients/${id}/notes/${noteId}`, { auth: true }),
+
+  /* clients → addresses */
+  addClientAddress: (id, payload) =>
+    post(`/api/admin/clients/${id}/addresses`, payload, { auth: true }),
+  updateClientAddress: (id, addressId, payload) =>
+    put(`/api/admin/clients/${id}/addresses/${addressId}`, payload, { auth: true }),
+  deleteClientAddress: (id, addressId) =>
+    del(`/api/admin/clients/${id}/addresses/${addressId}`, { auth: true }),
+
+  /* clients → tags (TEXT[] under the hood — pass plain strings) */
+  setClientTags: (id, tags) =>
+    put(`/api/admin/clients/${id}/tags`, { tags }, { auth: true }),
+
+  /* tag autocomplete — distinct values across the chosen scope.
+     Returns an array of strings; there is no tag registry to create. */
+  listTags: (scope = 'client') =>
+    get('/api/admin/tags', { auth: true, params: { scope } }),
+
+  /* ---------- vendors ---------- */
+  listVendors: (params) =>
+    get('/api/admin/vendors', { auth: true, params }),
+  getVendor: (id) => get(`/api/admin/vendors/${id}`, { auth: true }),
+  createVendor: (payload) =>
+    post('/api/admin/vendors', payload, { auth: true }),
+  updateVendor: (id, payload) =>
+    put(`/api/admin/vendors/${id}`, payload, { auth: true }),
+  deleteVendor: (id) =>
+    del(`/api/admin/vendors/${id}`, { auth: true }),
+  setVendorTags: (id, tags) =>
+    put(`/api/admin/vendors/${id}/tags`, { tags }, { auth: true }),
+
+  /* vendors → contacts */
+  addVendorContact: (id, payload) =>
+    post(`/api/admin/vendors/${id}/contacts`, payload, { auth: true }),
+  updateVendorContact: (id, contactId, payload) =>
+    put(`/api/admin/vendors/${id}/contacts/${contactId}`, payload, { auth: true }),
+  deleteVendorContact: (id, contactId) =>
+    del(`/api/admin/vendors/${id}/contacts/${contactId}`, { auth: true }),
+
+  /* vendors → rate cards */
+  addVendorRateCard: (id, payload) =>
+    post(`/api/admin/vendors/${id}/rate-cards`, payload, { auth: true }),
+  updateVendorRateCard: (id, cardId, payload) =>
+    put(`/api/admin/vendors/${id}/rate-cards/${cardId}`, payload, { auth: true }),
+  deleteVendorRateCard: (id, cardId) =>
+    del(`/api/admin/vendors/${id}/rate-cards/${cardId}`, { auth: true }),
+
+  /* ---------- purchase orders ---------- */
+  listPurchaseOrders: (params) =>
+    get('/api/admin/purchase-orders', { auth: true, params }),
+  getPurchaseOrder: (id) =>
+    get(`/api/admin/purchase-orders/${id}`, { auth: true }),
+  createPurchaseOrder: (payload) =>
+    post('/api/admin/purchase-orders', payload, { auth: true }),
+  updatePurchaseOrder: (id, payload) =>
+    put(`/api/admin/purchase-orders/${id}`, payload, { auth: true }),
+  recordPoPayment: (id, paidCents) =>
+    post(`/api/admin/purchase-orders/${id}/payment`, { paidCents }, { auth: true }),
+  deletePurchaseOrder: (id) =>
+    del(`/api/admin/purchase-orders/${id}`, { auth: true }),
+
+  /* ---------- invoices (Phase 3) ---------- */
+  listInvoices: (params) =>
+    get('/api/admin/invoices', { auth: true, params }),
+  getInvoice: (id) => get(`/api/admin/invoices/${id}`, { auth: true }),
+  createInvoice: (payload) =>
+    post('/api/admin/invoices', payload, { auth: true }),
+  updateInvoice: (id, payload) =>
+    put(`/api/admin/invoices/${id}`, payload, { auth: true }),
+  issueInvoice: (id) =>
+    post(`/api/admin/invoices/${id}/issue`, null, { auth: true }),
+  voidInvoice: (id) =>
+    post(`/api/admin/invoices/${id}/void`, null, { auth: true }),
+  deleteInvoice: (id) =>
+    del(`/api/admin/invoices/${id}`, { auth: true }),
+
+  /* ---------- transactions / cash flow ledger ---------- */
+  listTransactions: (params) =>
+    get('/api/admin/transactions', { auth: true, params }),
+  getTransaction: (id) => get(`/api/admin/transactions/${id}`, { auth: true }),
+  recordTransaction: (payload) =>
+    post('/api/admin/transactions', payload, { auth: true }),
+  updateTransaction: (id, payload) =>
+    put(`/api/admin/transactions/${id}`, payload, { auth: true }),
+  refundTransaction: (id, reason) =>
+    post(`/api/admin/transactions/${id}/refund`, { reason }, { auth: true }),
+  deleteTransaction: (id) =>
+    del(`/api/admin/transactions/${id}`, { auth: true }),
+
+  /* ---------- bookings ---------- */
+  listBookings: (params) =>
+    get('/api/admin/bookings', { auth: true, params }),
+  getBooking: (id) => get(`/api/admin/bookings/${id}`, { auth: true }),
+  createBooking: (payload) =>
+    post('/api/admin/bookings', payload, { auth: true }),
+  convertQuoteToBooking: (quoteId, payload = {}) =>
+    post(`/api/admin/bookings/from-quote/${quoteId}`, payload, { auth: true }),
+  updateBooking: (id, payload) =>
+    put(`/api/admin/bookings/${id}`, payload, { auth: true }),
+  deleteBooking: (id) =>
+    del(`/api/admin/bookings/${id}`, { auth: true }),
+
+  /* bookings → tasks (event checklist) */
+  addBookingTask: (id, payload) =>
+    post(`/api/admin/bookings/${id}/tasks`, payload, { auth: true }),
+  updateBookingTask: (id, taskId, payload) =>
+    put(`/api/admin/bookings/${id}/tasks/${taskId}`, payload, { auth: true }),
+  deleteBookingTask: (id, taskId) =>
+    del(`/api/admin/bookings/${id}/tasks/${taskId}`, { auth: true }),
 
   /* ---------- subscribers ---------- */
   listSubscribers: (params) =>

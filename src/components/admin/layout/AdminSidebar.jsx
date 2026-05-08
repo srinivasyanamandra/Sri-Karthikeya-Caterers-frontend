@@ -13,8 +13,23 @@ const NAV_GROUPS = [
     label: 'Operations',
     items: [
       { id: 'admin-quotes', label: 'Quote Requests', icon: 'fa-file-alt' },
+      { id: 'admin-bookings', label: 'Bookings', icon: 'fa-calendar-check' },
       { id: 'admin-clients', label: 'Clients', icon: 'fa-users' },
       { id: 'admin-reviews', label: 'Reviews', icon: 'fa-star' },
+    ],
+  },
+  {
+    label: 'Supply',
+    items: [
+      { id: 'admin-vendors', label: 'Vendors', icon: 'fa-store' },
+      { id: 'admin-purchase-orders', label: 'Purchase Orders', icon: 'fa-file-invoice-dollar' },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { id: 'admin-invoices', label: 'Invoices', icon: 'fa-file-invoice' },
+      { id: 'admin-transactions', label: 'Cash Flow', icon: 'fa-arrow-right-arrow-left' },
     ],
   },
   {

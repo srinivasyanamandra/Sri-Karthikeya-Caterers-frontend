@@ -66,6 +66,15 @@ const AdminSendInvitationPage= lazy(() => import('./pages/admin/SendInvitationPa
 const AdminClientsPage       = lazy(() => import('./pages/admin/ClientsPage'));
 const AdminEmailBuilderPage  = lazy(() => import('./pages/admin/EmailBuilderPage'));
 const AdminQuotesPage        = lazy(() => import('./pages/admin/QuotesPage'));
+const AdminBookingsPage      = lazy(() => import('./pages/admin/BookingsPage'));
+const AdminBookingDetailPage = lazy(() => import('./pages/admin/BookingDetailPage'));
+const AdminVendorsPage       = lazy(() => import('./pages/admin/VendorsPage'));
+const AdminVendorDetailPage  = lazy(() => import('./pages/admin/VendorDetailPage'));
+const AdminPurchaseOrdersPage      = lazy(() => import('./pages/admin/PurchaseOrdersPage'));
+const AdminPurchaseOrderDetailPage = lazy(() => import('./pages/admin/PurchaseOrderDetailPage'));
+const AdminInvoicesPage      = lazy(() => import('./pages/admin/InvoicesPage'));
+const AdminInvoiceDetailPage = lazy(() => import('./pages/admin/InvoiceDetailPage'));
+const AdminTransactionsPage  = lazy(() => import('./pages/admin/TransactionsPage'));
 const AdminSubscribersPage   = lazy(() => import('./pages/admin/SubscribersPage'));
 const AdminCampaignsPage     = lazy(() => import('./pages/admin/CampaignsPage'));
 
@@ -126,6 +135,11 @@ const useLegacyHashRedirect = () => {
       'admin-clients': '/admin/clients',
       'admin-emails': '/admin/emails',
       'admin-quotes': '/admin/quotes',
+      'admin-bookings': '/admin/bookings',
+      'admin-vendors': '/admin/vendors',
+      'admin-purchase-orders': '/admin/purchase-orders',
+      'admin-invoices': '/admin/invoices',
+      'admin-transactions': '/admin/transactions',
       'admin-subscribers': '/admin/subscribers',
       'admin-campaigns': '/admin/campaigns',
     };
@@ -285,6 +299,15 @@ function App() {
             <Route path="/admin/clients"          element={<AdminClientsPage />} />
             <Route path="/admin/emails"           element={<AdminEmailBuilderPage />} />
             <Route path="/admin/quotes"           element={<AdminQuotesPage />} />
+            <Route path="/admin/bookings"         element={<AdminBookingsPage />} />
+            <Route path="/admin/bookings/:id"     element={<AdminBookingDetailPage />} />
+            <Route path="/admin/vendors"          element={<AdminVendorsPage />} />
+            <Route path="/admin/vendors/:id"      element={<AdminVendorDetailPage />} />
+            <Route path="/admin/purchase-orders"  element={<AdminPurchaseOrdersPage />} />
+            <Route path="/admin/purchase-orders/:id" element={<AdminPurchaseOrderDetailPage />} />
+            <Route path="/admin/invoices"         element={<AdminInvoicesPage />} />
+            <Route path="/admin/invoices/:id"     element={<AdminInvoiceDetailPage />} />
+            <Route path="/admin/transactions"     element={<AdminTransactionsPage />} />
             <Route path="/admin/subscribers"      element={<AdminSubscribersPage />} />
             <Route path="/admin/campaigns"        element={<AdminCampaignsPage />} />
             {/* Unknown /admin/* paths fall back to the dashboard. */}

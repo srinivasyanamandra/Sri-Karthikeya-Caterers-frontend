@@ -13,6 +13,9 @@
 
 # misc
 .DS_Store
+
+# environment files (keep .env.example and .env.production in git)
+.env
 .env.local
 .env.development.local
 .env.test.local

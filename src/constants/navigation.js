@@ -24,6 +24,11 @@ export const ROUTES = {
   ADMIN_CLIENTS: 'admin-clients',
   ADMIN_EMAILS: 'admin-emails',
   ADMIN_QUOTES: 'admin-quotes',
+  ADMIN_BOOKINGS: 'admin-bookings',
+  ADMIN_VENDORS: 'admin-vendors',
+  ADMIN_PURCHASE_ORDERS: 'admin-purchase-orders',
+  ADMIN_INVOICES: 'admin-invoices',
+  ADMIN_TRANSACTIONS: 'admin-transactions',
   ADMIN_SUBSCRIBERS: 'admin-subscribers',
   ADMIN_CAMPAIGNS: 'admin-campaigns',
 };
@@ -50,6 +55,11 @@ const ID_TO_PATH = {
   'admin-clients': '/admin/clients',
   'admin-emails': '/admin/emails',
   'admin-quotes': '/admin/quotes',
+  'admin-bookings': '/admin/bookings',
+  'admin-vendors': '/admin/vendors',
+  'admin-purchase-orders': '/admin/purchase-orders',
+  'admin-invoices': '/admin/invoices',
+  'admin-transactions': '/admin/transactions',
   'admin-subscribers': '/admin/subscribers',
   'admin-campaigns': '/admin/campaigns',
 };

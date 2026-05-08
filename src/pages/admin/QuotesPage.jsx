@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminPageHero from '../../components/admin/layout/AdminPageHero';
 import AdminPortal from '../../components/admin/shared/AdminPortal';
 import { useToast } from './useToast';
@@ -40,19 +41,6 @@ const mapQuote = (q) => ({
   message: q.message || '',
 });
 
-/* ─── Seed data ───────────────────────────────────────────── */
-
-const SEED_QUOTES = [
-  { id: 1, clientName: 'Priya Sharma', email: 'priya@example.com', phone: '+91 98765 43211', eventType: 'Wedding', eventDate: '2026-06-15', guestCount: 500, status: 'pending', submittedDate: '2026-04-20', budget: '₹5,00,000', venue: 'Grand Palace, Hyderabad' },
-  { id: 2, clientName: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '+91 98765 43210', eventType: 'Corporate Event', eventDate: '2026-05-10', guestCount: 200, status: 'contacted', submittedDate: '2026-04-18', budget: '₹2,00,000', venue: 'Tech Park Convention Center' },
-  { id: 3, clientName: 'Anand Reddy', email: 'anand@example.com', phone: '+91 98765 43212', eventType: 'Birthday Party', eventDate: '2026-05-25', guestCount: 100, status: 'quoted', submittedDate: '2026-04-15', budget: '₹75,000', venue: 'Home' },
-  { id: 4, clientName: 'Lakshmi Iyer', email: 'lakshmi@example.com', phone: '+91 98765 43213', eventType: 'Anniversary', eventDate: '2026-07-01', guestCount: 150, status: 'booked', submittedDate: '2026-04-10', budget: '₹1,50,000', venue: 'Lakeview Resort' },
-  { id: 5, clientName: 'Suresh Menon', email: 'suresh@example.com', phone: '+91 98765 43214', eventType: 'Wedding', eventDate: '2026-08-20', guestCount: 800, status: 'pending', submittedDate: '2026-04-22', budget: '₹8,00,000', venue: 'Royal Gardens' },
-  { id: 6, clientName: 'Kavitha Nair', email: 'kavitha@example.com', phone: '+91 98765 43215', eventType: 'Engagement', eventDate: '2026-05-30', guestCount: 250, status: 'contacted', submittedDate: '2026-04-19', budget: '₹2,50,000', venue: 'Beachside Resort' },
-  { id: 7, clientName: 'Venkatesh Rao', email: 'venkatesh@example.com', phone: '+91 98765 43216', eventType: 'Corporate Event', eventDate: '2026-06-05', guestCount: 300, status: 'declined', submittedDate: '2026-04-12', budget: '₹3,00,000', venue: 'Business Hotel' },
-  { id: 8, clientName: 'Deepa Krishnan', email: 'deepa@example.com', phone: '+91 98765 43217', eventType: 'Housewarming', eventDate: '2026-05-15', guestCount: 80, status: 'pending', submittedDate: '2026-04-21', budget: '₹50,000', venue: 'New Home' },
-];
-
 /* ─── Status pipeline config ──────────────────────────────── */
 
 const STATUS_CONFIG = {
@@ -74,7 +62,9 @@ const fmt = (s) =>
 
 export default function QuotesPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [quotes, setQuotes] = useState([]);
+  const [converting, setConverting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -114,9 +104,6 @@ export default function QuotesPage() {
   }, [statusFilter]);
 
   useEffect(() => { reload(); }, [reload]);
-  /* keep reference to use as a SEED list to keep code paths stable in dev */
-  // eslint-disable-next-line no-unused-vars
-  const _seedRef = SEED_QUOTES;
 
   // Filter and sort
   const filtered = useMemo(() => {
@@ -190,6 +177,30 @@ export default function QuotesPage() {
       toast.error(err?.message || 'Could not update status. Please try again.');
     }
   }, [quotes, toast]);
+
+  // Convert a quote to a booking. Lightweight call — defaults seed a
+  // checklist on the new booking, and the user lands on the detail page
+  // to refine event time, package, and finance figures.
+  const handleConvertToBooking = useCallback(async (quote) => {
+    if (converting) return;
+    setConverting(true);
+    try {
+      const booking = await adminApi.convertQuoteToBooking(quote.id, {
+        seedDefaultTasks: true,
+      });
+      // Reflect the quote's new BOOKED status locally without a refetch.
+      setQuotes((prev) =>
+        prev.map((q) => (q.id === quote.id ? { ...q, status: 'booked' } : q))
+      );
+      setSelectedQuote(null);
+      toast.success(`Booking ${booking?.reference || 'created'}.`);
+      if (booking?.id) navigate(`/admin/bookings/${booking.id}`);
+    } catch (err) {
+      toast.error(err?.message || 'Could not convert quote to booking.');
+    } finally {
+      setConverting(false);
+    }
+  }, [converting, navigate, toast]);
 
   // Stats
   const stats = useMemo(() => {
@@ -509,6 +520,23 @@ export default function QuotesPage() {
                 }}
               >
                 <i className="fas fa-paper-plane" aria-hidden="true" /> Send quote
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={converting || selectedQuote.status === 'declined'}
+                onClick={() => handleConvertToBooking(selectedQuote)}
+                title={
+                  selectedQuote.status === 'booked'
+                    ? 'Already linked to a booking — opens the booking detail screen.'
+                    : 'Create a booking from this quote and seed a default checklist.'
+                }
+              >
+                {converting ? (
+                  <><i className="fas fa-spinner fa-spin" aria-hidden="true" /> Converting…</>
+                ) : (
+                  <><i className="fas fa-calendar-check" aria-hidden="true" /> Convert to booking</>
+                )}
               </button>
             </div>
           </div>

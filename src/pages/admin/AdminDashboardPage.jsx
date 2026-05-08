@@ -36,10 +36,15 @@ const STATUS_META = {
 };
 
 const TYPE_ICON = {
-  review: { icon: 'fa-star', color: 'var(--color-accent-dark)' },
-  quote: { icon: 'fa-file-alt', color: 'var(--color-primary)' },
-  email: { icon: 'fa-envelope', color: 'var(--color-success)' },
-  client: { icon: 'fa-user', color: '#6366f1' },
+  review:      { icon: 'fa-star', color: 'var(--color-accent-dark)' },
+  quote:       { icon: 'fa-file-alt', color: 'var(--color-primary)' },
+  email:       { icon: 'fa-envelope', color: 'var(--color-success)' },
+  client:      { icon: 'fa-user', color: '#6366f1' },
+  booking:     { icon: 'fa-calendar-check', color: 'var(--color-primary)' },
+  vendor:      { icon: 'fa-store', color: 'var(--color-accent-dark)' },
+  po:          { icon: 'fa-file-invoice-dollar', color: 'var(--color-primary)' },
+  invoice:     { icon: 'fa-file-invoice', color: 'var(--color-primary)' },
+  transaction: { icon: 'fa-arrow-right-arrow-left', color: 'var(--color-success)' },
 };
 
 /* Activity is sourced exclusively from the backend's /api/admin/dashboard
@@ -94,8 +99,26 @@ function DynamicGreeting() {
   return <span>{greeting}</span>;
 }
 
-/** Map a system_logs type → admin page id for activity-row click-through. */
-const pageForType = (t) => {
+/**
+ * Map a system_logs row → admin page id for activity-row click-through.
+ *
+ * Quote-typed log entries also cover booking lifecycle events
+ * (booking_created, booking_converted, booking_updated). When the action
+ * starts with "booking_" we route to the bookings list instead of quotes
+ * so the click lands on the right surface.
+ */
+const pageForActivity = (row) => {
+  const t = row?.type;
+  const action = row?.action || '';
+  const entityType = row?.entityType;
+  if (entityType === 'booking'        || action.startsWith('booking_')) return 'admin-bookings';
+  if (entityType === 'vendor'         || action.startsWith('vendor_'))  return 'admin-vendors';
+  if (entityType === 'purchase_order' || action.startsWith('po_'))      return 'admin-purchase-orders';
+  if (entityType === 'invoice'        || action.startsWith('invoice_')) return 'admin-invoices';
+  if (entityType === 'transaction'    ||
+      action === 'payment_recorded' || action === 'payment_refunded' ||
+      action === 'expense_recorded' || action === 'transaction_updated' ||
+      action === 'transaction_deleted') return 'admin-transactions';
   switch (t) {
     case 'review': return 'admin-reviews';
     case 'quote': return 'admin-quotes';
@@ -117,12 +140,24 @@ const AdminDashboardPage = () => {
     pendingQuotes: 0,
     pendingReviews: 0,
     activeSubscribers: 0,
+    bookingsConfirmed: 0,
+    bookingsInProgress: 0,
+    bookingsUpcomingThisMonth: 0,
+    vendorsActive: 0,
+    posDraft: 0,
+    posIssued: 0,
+    posOutstandingCents: 0,
+    invoicesOutstandingCents: 0,
+    revenueThisMonthCents: 0,
+    expensesThisMonthCents: 0,
+    netCashFlowThisMonthCents: 0,
   });
   const [trends, setTrends] = useState({
     newClientsThisMonth: 0,
     newQuotesThisMonth: 0,
     campaignsSentThisMonth: 0,
     emailsDeliveredThisMonth: 0,
+    bookingsUpcoming: 0,
   });
   const [activity, setActivity] = useState(INITIAL_ACTIVITY);
   const [scheduledCampaigns, setScheduledCampaigns] = useState([]);
@@ -165,6 +200,17 @@ const AdminDashboardPage = () => {
           pendingQuotes: t.quotesPending ?? 0,
           pendingReviews: t.reviewsPending ?? 0,
           activeSubscribers: t.subscribersActive ?? 0,
+          bookingsConfirmed: t.bookingsConfirmed ?? 0,
+          bookingsInProgress: t.bookingsInProgress ?? 0,
+          bookingsUpcomingThisMonth: t.bookingsUpcomingThisMonth ?? 0,
+          vendorsActive: t.vendorsActive ?? 0,
+          posDraft: t.posDraft ?? 0,
+          posIssued: t.posIssued ?? 0,
+          posOutstandingCents: t.posOutstandingCents ?? 0,
+          invoicesOutstandingCents: t.invoicesOutstandingCents ?? 0,
+          revenueThisMonthCents: t.revenueThisMonthCents ?? 0,
+          expensesThisMonthCents: t.expensesThisMonthCents ?? 0,
+          netCashFlowThisMonthCents: t.netCashFlowThisMonthCents ?? 0,
         });
         setTrends(data?.trends || {});
 
@@ -175,15 +221,30 @@ const AdminDashboardPage = () => {
         const apiActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
         if (apiActivity.length > 0) {
           setActivity(
-            apiActivity.map((row, i) => ({
-              id: row.id || `act-${i}`,
-              type: row.type || 'info',
-              message: row.message || `${row.type} · ${row.action}`,
-              time: row.at ? new Date(row.at).toLocaleString('en-IN') : '',
-              status: row.status || 'info',
-              page: pageForType(row.type),
-              read: false,
-            }))
+            apiActivity.map((row, i) => {
+              const action = row.action || '';
+              const entity = row.entityType;
+              const synthesizedType =
+                (entity === 'booking'        || action.startsWith('booking_')) ? 'booking'
+              : (entity === 'vendor'         || action.startsWith('vendor_'))  ? 'vendor'
+              : (entity === 'purchase_order' || action.startsWith('po_'))      ? 'po'
+              : (entity === 'invoice'        || action.startsWith('invoice_')) ? 'invoice'
+              : (entity === 'transaction' ||
+                 action === 'payment_recorded' || action === 'payment_refunded' ||
+                 action === 'expense_recorded' || action === 'transaction_updated' ||
+                 action === 'transaction_deleted')                              ? 'transaction'
+              : (row.type || 'info');
+              return {
+                id: row.id || `act-${i}`,
+                type: synthesizedType,
+                message: row.message || `${row.type} · ${row.action}`,
+                time: row.at ? new Date(row.at).toLocaleString('en-IN') : '',
+                status: row.status || 'info',
+                page: pageForActivity(row),
+                entityId: row.entityId || null,
+                read: false,
+              };
+            })
           );
         }
         setLoadError('');
@@ -218,6 +279,11 @@ const AdminDashboardPage = () => {
   const handleActivityNav = useCallback(
     (item) => {
       markRead(item.id);
+      // Deep-link booking activity rows to the specific booking detail.
+      if (item.type === 'booking' && item.entityId) {
+        navigate(`/admin/bookings/${item.entityId}`);
+        return;
+      }
       navigate(item.page);
     },
     [navigate, markRead]
@@ -225,6 +291,34 @@ const AdminDashboardPage = () => {
 
   const quickActions = useMemo(
     () => [
+      {
+        icon: 'fa-calendar-check',
+        title: 'Open Bookings',
+        description: 'See every confirmed event, the day-of checklist, and finance progress.',
+        action: 'View bookings',
+        badge: stats.bookingsUpcomingThisMonth
+          ? `${stats.bookingsUpcomingThisMonth} this month`
+          : null,
+        onClick: () => navigate('admin-bookings'),
+      },
+      {
+        icon: 'fa-file-invoice-dollar',
+        title: 'Purchase Orders',
+        description: 'Track vendor commitments, deliveries, and outstanding payables.',
+        action: 'Open PO ledger',
+        badge: stats.posOutstandingCents > 0
+          ? `${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(stats.posOutstandingCents / 100)} outstanding`
+          : null,
+        onClick: () => navigate('admin-purchase-orders'),
+      },
+      {
+        icon: 'fa-store',
+        title: 'Vendor Directory',
+        description: 'Find decorators, florists, equipment, and staffing partners with their rate cards.',
+        action: 'Open vendors',
+        badge: stats.vendorsActive ? `${stats.vendorsActive} active` : null,
+        onClick: () => navigate('admin-vendors'),
+      },
       {
         icon: 'fa-paper-plane',
         title: 'Send Review Invitation',
@@ -250,7 +344,7 @@ const AdminDashboardPage = () => {
         onClick: () => navigate('admin-clients'),
       },
     ],
-    [navigate]
+    [navigate, stats.bookingsUpcomingThisMonth, stats.posOutstandingCents, stats.vendorsActive]
   );
 
   /* ── KPI cards config ── */
@@ -265,6 +359,50 @@ const AdminDashboardPage = () => {
         change: trends.newClientsThisMonth ? `+${trends.newClientsThisMonth} this month` : null,
         positive: (trends.newClientsThisMonth || 0) > 0,
         delay: 50,
+      },
+      {
+        value: stats.bookingsConfirmed + stats.bookingsInProgress,
+        label: 'Active Bookings',
+        icon: 'fa-calendar-check',
+        tone: 'primary',
+        change: stats.bookingsUpcomingThisMonth
+          ? `${stats.bookingsUpcomingThisMonth} upcoming this month`
+          : 'Nothing on the calendar',
+        positive: stats.bookingsUpcomingThisMonth > 0,
+        delay: 90,
+      },
+      {
+        value: stats.posDraft + stats.posIssued,
+        label: 'Open POs',
+        icon: 'fa-file-invoice-dollar',
+        tone: stats.posOutstandingCents > 0 ? 'warning' : 'primary',
+        change: stats.posOutstandingCents > 0
+          ? `${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(stats.posOutstandingCents / 100)} outstanding`
+          : 'No outstanding payables',
+        positive: stats.posOutstandingCents === 0,
+        delay: 100,
+      },
+      {
+        value: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
+          .format((stats.revenueThisMonthCents || 0) / 100),
+        label: 'Revenue (mtd)',
+        icon: 'fa-arrow-down',
+        tone: 'success',
+        change: stats.netCashFlowThisMonthCents >= 0
+          ? `Net +${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(stats.netCashFlowThisMonthCents / 100)}`
+          : `Net ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(stats.netCashFlowThisMonthCents / 100)}`,
+        positive: stats.netCashFlowThisMonthCents >= 0,
+        delay: 105,
+      },
+      {
+        value: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
+          .format((stats.invoicesOutstandingCents || 0) / 100),
+        label: 'Receivables',
+        icon: 'fa-file-invoice',
+        tone: stats.invoicesOutstandingCents > 0 ? 'warning' : 'success',
+        change: stats.invoicesOutstandingCents > 0 ? 'Awaiting payment' : 'All clear',
+        positive: stats.invoicesOutstandingCents === 0,
+        delay: 110,
       },
       {
         value: stats.pendingQuotes,

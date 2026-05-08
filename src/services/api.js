@@ -2,9 +2,9 @@
  * API client for the Sri Karthikeya Caterers backend.
  *
  * SINGLE SOURCE OF TRUTH FOR API URL:
- * - Reads base URL from REACT_APP_API_URL environment variable (NO hardcoded fallback)
+ * - Reads base URL from REACT_APP_API_URL environment variable
  * - Local development: Uses http://localhost:8080 (from .env)
- * - Production: Uses https://skc-backend-5o4z.onrender.com (from .env.production)
+ * - Production: Uses https://skc-backend-5o4z.onrender.com (from .env.production or Vercel env)
  * - Override locally: Create .env.local with REACT_APP_API_URL=<your-url>
  *
  * - Attaches Authorization: Bearer <jwt> on admin requests
@@ -14,12 +14,16 @@
  *   the navigation layer can redirect to /#admin-login
  */
 
-// SINGLE SOURCE OF TRUTH - NO HARDCODED FALLBACK
-const API_URL = process.env.REACT_APP_API_URL?.replace(/\/+$/, '');
+// SINGLE SOURCE OF TRUTH
+// Fallback to production URL for Vercel/Netlify deployments where env vars might not be set during build
+const API_URL = (
+  process.env.REACT_APP_API_URL || 
+  'https://skc-backend-5o4z.onrender.com'
+).replace(/\/+$/, '');
 
-if (!API_URL) {
-  console.error('❌ REACT_APP_API_URL is not set! Check your .env file.');
-  throw new Error('API URL configuration is missing. Please set REACT_APP_API_URL in your .env file.');
+// Log the API URL in development for debugging
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔗 API URL:', API_URL);
 }
 
 const TOKEN_KEY = 'adminToken';
